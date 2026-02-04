@@ -1,4 +1,4 @@
-import { EncryptionKeyPair, EncryptionState, StoredMessage } from '../types';
+import { CryptoSession, CryptoState, StoredMessage } from '../types';
 
 class StorageService {
   private dbName = 'MatrixifyDB';
@@ -17,75 +17,72 @@ class StorageService {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
-        
-        // Store for encryption key pairs
-        if (!db.objectStoreNames.contains('keyPairs')) {
-          db.createObjectStore('keyPairs', { keyPath: 'userId' });
+
+        // CryptoStore
+        if (!db.objectStoreNames.contains('CryptoStore')) {
+          db.createObjectStore('CryptoStore', { keyPath: 'userId' });
         }
-        
-        // Store for encryption states
-        if (!db.objectStoreNames.contains('encryptionStates')) {
-          db.createObjectStore('encryptionStates', { keyPath: 'userId' });
+
+        // Store for per user sessions
+        if (!db.objectStoreNames.contains('CryptoSessions')) {
+          db.createObjectStore('CryptoSessions', { keyPath: 'peerUserId' });
         }
-        
+
         // Store for encrypted messages
-        if (!db.objectStoreNames.contains('messages')) {
-          const messageStore = db.createObjectStore('messages', { keyPath: 'id' });
-          messageStore.createIndex('timestamp', 'timestamp', { unique: false });
-          messageStore.createIndex('senderId', 'senderId', { unique: false });
-          messageStore.createIndex('recipientId', 'recipientId', { unique: false });
+        if (!db.objectStoreNames.contains('StoredMessages')) {
+          db.createObjectStore('StoredMessages', { keyPath: 'id' });
         }
       };
     });
   }
 
-  async storeKeyPair(userId: string, keyPair: EncryptionKeyPair): Promise<void> {
+  async storeCrypto(state: CryptoState): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['keyPairs'], 'readwrite');
-      const store = transaction.objectStore('keyPairs');
-      const request = store.put({ ...keyPair, userId });
-      
+      const transaction = this.db!.transaction(['CryptoStore'], 'readwrite');
+      const store = transaction.objectStore('CryptoStore');
+      const request = store.put(state);
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve();
     });
   }
 
-  async getKeyPair(userId: string): Promise<EncryptionKeyPair | null> {
+  async getCrypto(userId: string): Promise<CryptoState | null> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['keyPairs'], 'readonly');
-      const store = transaction.objectStore('keyPairs');
+      const transaction = this.db!.transaction(['CryptoStore'], 'readonly');
+      const store = transaction.objectStore('CryptoStore');
       const request = store.get(userId);
-      
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result || null);
     });
   }
 
-  async storeEncryptionState(userId: string, state: EncryptionState): Promise<void> {
+  async storeSession(session: CryptoSession): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['encryptionStates'], 'readwrite');
-      const store = transaction.objectStore('encryptionStates');
-      const request = store.put({ ...state, userId });
-      
+      const transaction = this.db!.transaction(['CryptoSessions'], 'readwrite');
+      const store = transaction.objectStore('CryptoSessions');
+      const request = store.put(session);
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve();
     });
   }
 
-  async getEncryptionState(userId: string): Promise<EncryptionState | null> {
+  async getSession(peerUserId: string): Promise<CryptoSession | null> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['encryptionStates'], 'readonly');
-      const store = transaction.objectStore('encryptionStates');
-      const request = store.get(userId);
-      
+      const transaction = this.db!.transaction(['CryptoSessions'], 'readonly');
+      const store = transaction.objectStore('CryptoSessions');
+      const request = store.get(peerUserId);
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result || null);
     });
@@ -93,41 +90,27 @@ class StorageService {
 
   async storeMessage(message: StoredMessage): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['messages'], 'readwrite');
-      const store = transaction.objectStore('messages');
+      const transaction = this.db!.transaction(['StoredMessages'], 'readwrite');
+      const store = transaction.objectStore('StoredMessages');
       const request = store.put(message);
-      
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve();
     });
   }
 
-  async getMessage(messageId: string): Promise<StoredMessage | null> {
+  async getMessage(id: string): Promise<StoredMessage | null> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['messages'], 'readonly');
-      const store = transaction.objectStore('messages');
-      const request = store.get(messageId);
-      
+      const transaction = this.db!.transaction(['StoredMessages'], 'readonly');
+      const store = transaction.objectStore('StoredMessages');
+      const request = store.get(id);
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result || null);
-    });
-  }
-
-  async getMessagesByUser(userId: string): Promise<StoredMessage[]> {
-    if (!this.db) await this.init();
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['messages'], 'readonly');
-      const store = transaction.objectStore('messages');
-      const index = store.index('recipientId');
-      const request = index.getAll(userId);
-      
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || []);
     });
   }
 }

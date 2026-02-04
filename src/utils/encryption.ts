@@ -1,137 +1,199 @@
-import { EncryptionKeyPair, EncryptionState } from '../types';
 import { storageService } from './storage';
+import * as vodozemac from 'vodozemac-wasm-bindings';
 
-class EncryptionService {
+export function stringToUint8Array(str: string) {
+  const out = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) {
+    out[i] = str.charCodeAt(i);
+  }
+  return out;
+}
+
+export function uInt8ArrayToString(arr: Uint8Array) {
+  return String.fromCharCode(...arr);
+}
+
+export interface UserKeys {
+  /** EC DH */
+  curve25519: string;
+  /** EC signing */
+  ed25519: string;
+}
+
+export class EncryptionService {
+  static preKeyInitialMessage = "🔑 Encryption works!";
   private initialized = false;
-  private vodozemac: any = null;
+  private account: vodozemac.Account | undefined;
+  private id: string;
+  public identityKey: string | undefined;
+  private pickleKey: Uint8Array | undefined;
+
+  constructor(identifier: string) {
+    this.id = identifier;
+  }
 
   async init(): Promise<void> {
     if (this.initialized) return;
 
     try {
       // Import vodozemac-wasm-bindings
-      const vodozemac = await import('vodozemac-wasm-bindings');
-      this.vodozemac = vodozemac;
       await storageService.init();
       this.initialized = true;
+      this.setupAccount();
     } catch (error) {
       console.error('Failed to initialize encryption service:', error);
       throw error;
     }
   }
 
-  async generateKeyPair(userId: string, deviceId: string): Promise<EncryptionKeyPair> {
-    if (!this.initialized) await this.init();
-
-    try {
-      // Generate account using vodozemac
-      const account = new this.vodozemac.Account();
-      const deviceKeys = account.device_keys();
-      
-      const keyPair: EncryptionKeyPair = {
-        userId,
-        deviceId,
-        publicKey: JSON.stringify(deviceKeys),
-        privateKey: JSON.stringify(account.pickle())
-      };
-
-      // Store the key pair and account
-      await storageService.storeKeyPair(userId, keyPair);
-      
-      const encryptionState: EncryptionState = {
-        keyPair,
-        outboundGroupSessions: new Map(),
-        inboundGroupSessions: new Map()
-      };
-      
-      await storageService.storeEncryptionState(userId, encryptionState);
-      
-      return keyPair;
-    } catch (error) {
-      console.error('Failed to generate key pair:', error);
-      throw error;
+  private async rePickleAccount() {
+    const accountCrypto = await storageService.getCrypto(this.id);
+    if (accountCrypto && this.account && this.pickleKey) {
+      await storageService.storeCrypto({
+        userId: accountCrypto.userId,
+        accountPickle: this.account.pickle(this.pickleKey),
+        pickleKey: accountCrypto.pickleKey,
+        identityKey: accountCrypto.identityKey,
+        lastUpdated: Date.now(),
+      })
     }
   }
 
-  async getKeyPair(userId: string): Promise<EncryptionKeyPair | null> {
-    if (!this.initialized) await this.init();
-    return await storageService.getKeyPair(userId);
+  private async rePickleSession(peerUserId: string, session: vodozemac.Session) {
+    if (this.pickleKey) {
+      await storageService.storeSession({
+        peerUserId: peerUserId,
+        sessionPickle: session.pickle(this.pickleKey),
+      })
+    }
   }
 
-  async encryptMessage(userId: string, recipientPublicKey: string, message: string): Promise<string> {
+  private async setupAccount() {
+    const accountCrypto = await storageService.getCrypto(this.id);
+    if (accountCrypto) {
+      const pickleKeyBinary = atob(accountCrypto.pickleKey);
+      this.pickleKey = new Uint8Array(pickleKeyBinary.length);
+      for (let i = 0; i < pickleKeyBinary.length; i++) {
+        this.pickleKey[i] = pickleKeyBinary.charCodeAt(i);
+      }
+      this.account = vodozemac.Account.from_pickle(accountCrypto.accountPickle, this.pickleKey);
+    } else {
+      this.account = new vodozemac.Account();
+      this.pickleKey = new Crypto().getRandomValues(new Uint8Array(32));
+      await storageService.storeCrypto({
+        userId: this.id,
+        accountPickle: this.account.pickle(this.pickleKey),
+        pickleKey: btoa(String.fromCharCode(...this.pickleKey)),
+        identityKey: this.account.curve25519_key,
+        lastUpdated: Date.now()
+      })
+    }
+
+    this.identityKey = this.account.curve25519_key;
+  }
+
+
+  /**
+   * creates an OTK (one time key) ready to be published
+   * @returns OTK `string` or `undefined` if account is not initialized
+   */
+  async createOTK() {
+    if (!this.account) return;
+    this.account.generate_one_time_keys(1);
+    this.rePickleAccount();
+    const otk = Array.from((this.account.one_time_keys as Map<number, string>).values())[0];
+    this.account.mark_keys_as_published();
+    return otk;
+  }
+
+  /**
+    * creates a session from OTK (one time key)
+    * @param peerUserId id of the user that the OTK was gotten from
+    * @param identityKey identityKey of the peer user
+    * @param otk the one time key
+    * @returns first encrypted message sent to establish full connection
+    */
+  async createSessionFromOTK(peerUserId: string, identityKey: string, otk: string) {
+    if (!this.account) return;
+    const session = this.account.create_outbound_session(identityKey, otk);
+    const preKeyMessage = session.encrypt(stringToUint8Array(EncryptionService.preKeyInitialMessage));
+    this.rePickleSession(peerUserId, session);
+    this.rePickleAccount();
+    return preKeyMessage;
+  }
+
+  /**
+   * creates a session from prekey (or the first message gotten from a user)
+   * @param peerUserId id of the user that the message was gotten from
+   * @param identityKey identityKey of the peer user
+   * @param messageType type of the message (placed inside the message itself)
+   * @param ciphertext ciphertext part of the message
+   * @returns `undefined` if it fails, `true` if it succeeds
+   */
+  async createSessionFromPreKey(peerUserId: string, identityKey: string, messageType: number, ciphertext: string) {
+    if (!this.account) return;
+    const preKeyMessage = this.account.create_inbound_session(identityKey, messageType, ciphertext);
+    if (uInt8ArrayToString(preKeyMessage.plaintext) != EncryptionService.preKeyInitialMessage)
+      return;
+    this.rePickleSession(peerUserId, preKeyMessage.session);
+    this.rePickleAccount();
+    return true;
+  }
+
+  /**
+   * Encrypt a message to be sent to a user
+   * @param peerUserId id of the user to be sent to
+   * @param message the message
+   * @returns an `object` containing `ciphertext` and `messageType`
+   */
+  async encryptMessage(peerUserId: string, message: string) {
     if (!this.initialized) await this.init();
 
     try {
-      // Get the current encryption state
-      const state = await storageService.getEncryptionState(userId);
-      if (!state) {
-        throw new Error('No encryption state found for user');
+      const storedSession = await storageService.getSession(peerUserId);
+      if (!storedSession || !this.pickleKey) {
+        console.error('Failed to encrypt message: session/account not found');
+        return;
       }
-
-      // Restore account from stored pickle
-      const accountData = JSON.parse(state.keyPair.privateKey);
-      const account = this.vodozemac.Account.from_pickle(accountData);
-
-      // Create olm session for encryption
-      const recipientKeys = JSON.parse(recipientPublicKey);
-      const session = account.create_outbound_session(recipientKeys);
-      
-      // Encrypt the message
-      const encryptedMessage = session.encrypt(message);
-      
-      // Update the account state
-      const updatedEncryptionState: EncryptionState = {
-        ...state,
-        keyPair: {
-          ...state.keyPair,
-          privateKey: JSON.stringify(account.pickle())
-        }
-      };
-      
-      await storageService.storeEncryptionState(userId, updatedEncryptionState);
-
-      return JSON.stringify(encryptedMessage);
+      const session = vodozemac.Session.from_pickle(storedSession.sessionPickle, this.pickleKey);
+      const encryptedMessage = session.encrypt(stringToUint8Array(message));
+      this.rePickleSession(peerUserId, session);
+      return encryptedMessage;
     } catch (error) {
       console.error('Failed to encrypt message:', error);
       throw error;
     }
   }
 
-  async decryptMessage(userId: string, senderPublicKey: string, encryptedMessage: string): Promise<string> {
+  /**
+   * Decrypt a message sent by a user
+   * @param peerUserId id of the user that sent the message
+   * @param messageType type of the message
+   * @param ciphertext the encrypted message
+   * @returns the decrypted text in form of `string`
+   */
+  async decryptMessage(peerUserId: string, messageId: string, messageType: number, ciphertext: string) {
     if (!this.initialized) await this.init();
 
     try {
-      // Get the current encryption state
-      const state = await storageService.getEncryptionState(userId);
-      if (!state) {
-        throw new Error('No encryption state found for user');
+      const storedMessage = await storageService.getMessage(messageId);
+      if (storedMessage) {
+        return storedMessage.plaintext;
       }
-
-      // Restore account from stored pickle
-      const accountData = JSON.parse(state.keyPair.privateKey);
-      const account = this.vodozemac.Account.from_pickle(accountData);
-
-      // Parse the encrypted message
-      const encryptedData = JSON.parse(encryptedMessage);
-      
-      // Create inbound session for decryption
-      const senderKeys = JSON.parse(senderPublicKey);
-      const session = account.create_inbound_session(senderKeys, encryptedData);
-      
-      // Decrypt the message
-      const decryptedMessage = session.decrypt(encryptedData);
-      
-      // Update the account state
-      const updatedEncryptionState: EncryptionState = {
-        ...state,
-        keyPair: {
-          ...state.keyPair,
-          privateKey: JSON.stringify(account.pickle())
-        }
-      };
-      
-      await storageService.storeEncryptionState(userId, updatedEncryptionState);
-
+      const storedSession = await storageService.getSession(peerUserId);
+      if (!storedSession || !this.pickleKey) {
+        console.error('Failed to encrypt message: session/account not found');
+        return;
+      }
+      const session = vodozemac.Session.from_pickle(storedSession.sessionPickle, this.pickleKey);
+      const decryptedMessage = uInt8ArrayToString(session.decrypt(messageType, ciphertext));
+      storageService.storeMessage({
+        id: messageId,
+        plaintext: ciphertext,
+        senderUserId: peerUserId,
+        timestamp: Date.now()
+      });
+      this.rePickleSession(peerUserId, session);
       return decryptedMessage;
     } catch (error) {
       console.error('Failed to decrypt message:', error);
@@ -139,40 +201,14 @@ class EncryptionService {
     }
   }
 
-  // Exposed functions for later implementation
-  async createGroupSession(userId: string, roomId: string): Promise<string> {
-    if (!this.initialized) await this.init();
-    
-    // This will be implemented later for group chat encryption
-    console.log('createGroupSession called for userId:', userId, 'roomId:', roomId);
-    return 'group-session-placeholder';
+  async storeMessage(messageId: string, text: string, senderUserId: string) {
+    storageService.storeMessage({
+      id: messageId,
+      plaintext: text,
+      senderUserId,
+      timestamp: Date.now(),
+    })
   }
 
-  async encryptForGroup(userId: string, roomId: string, _message: string): Promise<string> {
-    if (!this.initialized) await this.init();
-    
-    // This will be implemented later for group chat encryption
-    console.log('encryptForGroup called for userId:', userId, 'roomId:', roomId);
-    return 'encrypted-group-message-placeholder';
-  }
-
-  async decryptFromGroup(userId: string, roomId: string, _encryptedMessage: string): Promise<string> {
-    if (!this.initialized) await this.init();
-    
-    // This will be implemented later for group chat encryption
-    console.log('decryptFromGroup called for userId:', userId, 'roomId:', roomId);
-    return 'decrypted-group-message-placeholder';
-  }
-
-  async getPublicKey(userId: string): Promise<string | null> {
-    const keyPair = await this.getKeyPair(userId);
-    return keyPair ? keyPair.publicKey : null;
-  }
-
-  async hasKeys(userId: string): Promise<boolean> {
-    const keyPair = await this.getKeyPair(userId);
-    return keyPair !== null;
-  }
+  // TODO: implement MEGOLM for groups
 }
-
-export const encryptionService = new EncryptionService();

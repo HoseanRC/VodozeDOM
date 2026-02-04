@@ -1,22 +1,35 @@
-export interface EncryptionKeyPair {
-  deviceId: string;
-  userId: string;
-  publicKey: string;
-  privateKey: string;
+export interface CryptoState {
+  userId: string;           // the crypto user id
+  pickleKey: string;        // local secret
+  accountPickle: string;    // vodozemac Account pickle
+  identityKey: string;      // curve25519 public key
+  lastUpdated: number;
+}
+
+export interface CryptoSession {
+  peerUserId: string;
+  sessionPickle: string;
 }
 
 export interface StoredMessage {
   id: string;
-  encryptedContent: string;
+  plaintext: string;
+  senderUserId: string;
   timestamp: number;
-  senderId: string;
-  recipientId: string;
 }
 
-export interface EncryptionState {
-  keyPair: EncryptionKeyPair;
-  outboundGroupSessions: Map<string, any>;
-  inboundGroupSessions: Map<string, any>;
+export interface KeyShare {
+  type: 'key_response';
+  forUserId: string;
+  identityKey: string;
+  oneTimeKey: string;
+  timestamp: number;
+}
+
+export interface EncryptedPayload {
+  type: 'olm';
+  senderUserId: string;
+  ciphertext: any; // vodozemac message
 }
 
 export interface ExtensionMessage {
