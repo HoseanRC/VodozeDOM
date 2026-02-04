@@ -4,7 +4,7 @@ import manifest from './manifest.json'
 
 export default defineConfig({
   plugins: [
-    crx({ 
+    crx({
       manifest,
       contentScripts: {
         injectCss: true
@@ -12,9 +12,14 @@ export default defineConfig({
     }),
   ],
   build: {
+    minify: false,
+    terserOptions: {
+      compress: false,
+      mangle: false,
+    },
     rollupOptions: {
       input: {
-        popup: './src/popup/popup.html'
+        popup: './src/popup/popup.html',
       }
     }
   }

@@ -1,8 +1,10 @@
 import { FloatingButton } from '../components/FloatingButton';
+import { BaleChatManager } from '../bale/bale-chat';
 import { ExtensionMessage } from '../types';
 
 class ContentScript {
   private floatingButton: FloatingButton | null = null;
+  private baleChatManager: BaleChatManager | null = null;
   private currentUserId = 'anonymous-user';
 
   constructor() {
@@ -10,18 +12,22 @@ class ContentScript {
   }
 
   private async init(): Promise<void> {
-    // Create and mount floating button
-    this.floatingButton = new FloatingButton();
-    this.floatingButton.mount();
+    if (this.isBaleChat()) {
+      this.baleChatManager = new BaleChatManager();
+      await this.baleChatManager.initialize();
+    } else {
+      this.floatingButton = new FloatingButton();
+      this.floatingButton.mount();
+      this.attachPanelListeners();
+    }
 
-    // Attach event listeners to panel elements
     this.attachPanelListeners();
-
-    // Listen for messages from background script
     chrome.runtime.onMessage.addListener(this.handleBackgroundMessage.bind(this));
-
-    // Initialize with existing keys if available
     await this.checkExistingKeys();
+  }
+
+  private isBaleChat(): boolean {
+    return window.location.hostname === 'web.bale.ai' && window.location.pathname.includes('/chat');
   }
 
   private attachPanelListeners(): void {
@@ -29,19 +35,15 @@ class ContentScript {
 
     const panel = this.floatingButton.getPanel();
 
-    // Generate keys button
     const generateBtn = panel.querySelector('#matrixify-generate-keys') as HTMLButtonElement;
     generateBtn?.addEventListener('click', () => this.generateKeys());
 
-    // Encrypt button
     const encryptBtn = panel.querySelector('#matrixify-encrypt-btn') as HTMLButtonElement;
     encryptBtn?.addEventListener('click', () => this.encryptMessage());
 
-    // Decrypt button
     const decryptBtn = panel.querySelector('#matrixify-decrypt-btn') as HTMLButtonElement;
     decryptBtn?.addEventListener('click', () => this.decryptMessage());
 
-    // Copy public key button
     const copyKeyBtn = panel.querySelector('#matrixify-copy-key') as HTMLButtonElement;
     copyKeyBtn?.addEventListener('click', () => this.copyPublicKey());
   }
@@ -218,13 +220,13 @@ class ContentScript {
 
     const panel = this.floatingButton.getPanel();
     const statusDiv = panel.querySelector('#matrixify-key-status') as HTMLDivElement;
-    
+
     statusDiv.textContent = message;
     statusDiv.className = isError ? 'error' : '';
   }
 
   private generateRequestId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    return Date.now().toString(36) + Math.random().toString(36).substring(2);
   }
 
   public destroy(): void {
@@ -232,8 +234,11 @@ class ContentScript {
       this.floatingButton.unmount();
       this.floatingButton = null;
     }
+    if (this.baleChatManager) {
+      this.baleChatManager.destroy();
+      this.baleChatManager = null;
+    }
   }
 }
 
-// Initialize content script
 new ContentScript();

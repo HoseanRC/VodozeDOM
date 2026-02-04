@@ -1,7 +1,9 @@
 import { ExtensionMessage } from '../types';
-import { encryptionService } from '../utils/encryption';
+import { EncryptionService } from '../utils/encryption';
+import vodozemacWasm from "../vodozemac/vodozemac_bg.wasm?url";
+import vodozemac from "../vodozemac";
 
-console.log("dklskjkjfglkjfdlkgdf");
+const encryptionService = new EncryptionService('background-service');
 
 class BackgroundService {
   private initialized = false;
@@ -13,12 +15,13 @@ class BackgroundService {
   private async init(): Promise<void> {
     if (this.initialized) return;
 
+    await vodozemac(vodozemacWasm);
+
     try {
       await encryptionService.init();
       this.initialized = true;
 
-      console.log("cool ig");
-      // Listen for messages from content scripts
+      console.log('Background service initialized');
       chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
     } catch (error) {
       console.error('Failed to initialize background service:', error);
@@ -30,14 +33,12 @@ class BackgroundService {
     sender: chrome.runtime.MessageSender,
     _sendResponse: (response?: any) => void
   ): Promise<void> {
-    console.log("got msg");
     try {
       switch (message.type) {
         case 'GENERATE_KEYS':
           await this.handleGenerateKeys(message, sender);
           break;
         case 'GET_KEYS':
-          console.log("getting keys");
           await this.handleGetKeys(message, sender);
           break;
         case 'ENCRYPT':
@@ -45,6 +46,27 @@ class BackgroundService {
           break;
         case 'DECRYPT':
           await this.handleDecrypt(message, sender);
+          break;
+        case 'BALE_CREATE_OTK':
+          await this.handleBaleCreateOTK(message, sender);
+          break;
+        case 'BALE_GET_IDENTITY_KEY':
+          await this.handleBaleGetIdentityKey(message, sender);
+          break;
+        case 'BALE_CREATE_SESSION_FROM_OTK':
+          await this.handleBaleCreateSessionFromOTK(message, sender);
+          break;
+        case 'BALE_CREATE_SESSION_FROM_PREKEY':
+          await this.handleBaleCreateSessionFromPrekey(message, sender);
+          break;
+        case 'BALE_ENCRYPT':
+          await this.handleBaleEncrypt(message, sender);
+          break;
+        case 'BALE_DECRYPT':
+          await this.handleBaleDecrypt(message, sender);
+          break;
+        case 'BALE_CHECK_MESSAGE':
+          await this.handleBaleCheckMessage(message, sender);
           break;
         default:
           console.warn('Unknown message type:', message.type);
@@ -57,17 +79,13 @@ class BackgroundService {
 
   private async handleGenerateKeys(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
-      const { userId } = message.data;
-      const deviceId = `device-${Date.now()}`;
-      
-      const keyPair = await encryptionService.generateKeyPair(userId, deviceId);
-      
+      const publicKey = encryptionService.identityKey;
+
       const response: ExtensionMessage = {
         type: 'KEYS_RESULT',
         data: {
           success: true,
-          publicKey: keyPair.publicKey,
-          deviceId: keyPair.deviceId
+          publicKey
         },
         requestId: message.requestId
       };
@@ -89,21 +107,14 @@ class BackgroundService {
 
   private async handleGetKeys(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
-      const { userId } = message.data;
-      
-      const hasKeys = await encryptionService.hasKeys(userId);
-      let publicKey = null;
-      
-      if (hasKeys) {
-        publicKey = await encryptionService.getPublicKey(userId);
-      }
+      const publicKey = encryptionService.identityKey;
 
       const response: ExtensionMessage = {
         type: 'KEYS_RESULT',
         data: {
-          success: hasKeys,
-          publicKey: publicKey,
-          hasKeys
+          success: !!publicKey,
+          publicKey,
+          hasKeys: !!publicKey
         },
         requestId: message.requestId
       };
@@ -125,11 +136,10 @@ class BackgroundService {
 
   private async handleEncrypt(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
-      const { userId, message: plainMessage, recipientPublicKey } = message.data;
-      
+      const { peerUserId, message: plainMessage } = message.data;
+
       const encryptedMessage = await encryptionService.encryptMessage(
-        userId,
-        recipientPublicKey,
+        peerUserId,
         plainMessage
       );
 
@@ -137,7 +147,7 @@ class BackgroundService {
         type: 'ENCRYPT_RESULT',
         data: {
           success: true,
-          encryptedMessage
+          encryptedMessage: JSON.stringify(encryptedMessage)
         },
         requestId: message.requestId
       };
@@ -159,12 +169,13 @@ class BackgroundService {
 
   private async handleDecrypt(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
-      const { userId, encryptedMessage, senderPublicKey } = message.data;
-      
+      const { peerUserId, messageId, messageType, ciphertext } = message.data;
+
       const decryptedMessage = await encryptionService.decryptMessage(
-        userId,
-        senderPublicKey,
-        encryptedMessage
+        peerUserId,
+        messageId,
+        messageType,
+        ciphertext
       );
 
       const response: ExtensionMessage = {
@@ -180,6 +191,230 @@ class BackgroundService {
     } catch (error) {
       const response: ExtensionMessage = {
         type: 'DECRYPT_RESULT',
+        data: {
+          success: false,
+          error: (error as Error).message
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    }
+  }
+
+  private async handleBaleCreateOTK(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      const otk = await encryptionService.createOTK();
+      const identityKey = encryptionService.identityKey;
+
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: true,
+          otk,
+          identityKey
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    } catch (error) {
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: false,
+          error: (error as Error).message
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    }
+  }
+
+  private async handleBaleGetIdentityKey(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      const identityKey = encryptionService.identityKey;
+
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: !!identityKey,
+          identityKey
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    } catch (error) {
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: false,
+          error: (error as Error).message
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    }
+  }
+
+  private async handleBaleCreateSessionFromOTK(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      const { peerUserId, identityKey, otk } = message.data;
+
+      const preKeyMessage = await encryptionService.createSessionFromOTK(
+        peerUserId,
+        identityKey,
+        otk
+      );
+
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: true,
+          preKeyMessage
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    } catch (error) {
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: false,
+          error: (error as Error).message
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    }
+  }
+
+  private async handleBaleCreateSessionFromPrekey(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      const { peerUserId, identityKey, messageType, ciphertext } = message.data;
+
+      const result = await encryptionService.createSessionFromPreKey(
+        peerUserId,
+        identityKey,
+        messageType,
+        ciphertext
+      );
+
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: result === true
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    } catch (error) {
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: false,
+          error: (error as Error).message
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    }
+  }
+
+  private async handleBaleEncrypt(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      const { peerUserId, message: plainMessage } = message.data;
+
+      const encryptedMessage = await encryptionService.encryptMessage(
+        peerUserId,
+        plainMessage
+      );
+
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: true,
+          encryptedMessage
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    } catch (error) {
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: false,
+          error: (error as Error).message
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    }
+  }
+
+  private async handleBaleDecrypt(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      const { peerUserId, messageId, messageType, ciphertext } = message.data;
+
+      const decryptedMessage = await encryptionService.decryptMessage(
+        peerUserId,
+        messageId,
+        messageType,
+        ciphertext
+      );
+
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: true,
+          decryptedMessage
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    } catch (error) {
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: false,
+          error: (error as Error).message
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    }
+  }
+
+  private async handleBaleCheckMessage(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      const { messageId } = message.data;
+
+      const exists = await encryptionService.checkMessage(messageId);
+
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: true,
+          exists
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    } catch (error) {
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
         data: {
           success: false,
           error: (error as Error).message
@@ -209,20 +444,6 @@ class BackgroundService {
 
     this.sendResponse(sender.tab?.id, response);
   }
-
-  // Exposed functions for later implementation
-  public async handleGroupSessionCreation(roomId: string): Promise<string> {
-    return await encryptionService.createGroupSession('anonymous-user', roomId);
-  }
-
-  public async handleGroupEncryption(roomId: string, message: string): Promise<string> {
-    return await encryptionService.encryptForGroup('anonymous-user', roomId, message);
-  }
-
-  public async handleGroupDecryption(roomId: string, encryptedMessage: string): Promise<string> {
-    return await encryptionService.decryptFromGroup('anonymous-user', roomId, encryptedMessage);
-  }
 }
 
-// Initialize background service
 new BackgroundService();

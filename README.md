@@ -97,10 +97,10 @@ src/
 ├── types/          # TypeScript types
 ├── utils/          # Utility functions
 └── popup/          # Popup script
+    └── popup.html  # Popup HTML
 
 public/
 ├── manifest.json   # Extension manifest
-├── popup.html      # Popup HTML
 └── content.css     # Content script styles
 ```
 

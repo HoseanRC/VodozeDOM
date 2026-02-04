@@ -1,5 +1,5 @@
 import { storageService } from './storage';
-import * as vodozemac from 'vodozemac-wasm-bindings';
+import * as vodozemac from '../vodozemac';
 
 export function stringToUint8Array(str: string) {
   const out = new Uint8Array(str.length);
@@ -11,13 +11,6 @@ export function stringToUint8Array(str: string) {
 
 export function uInt8ArrayToString(arr: Uint8Array) {
   return String.fromCharCode(...arr);
-}
-
-export interface UserKeys {
-  /** EC DH */
-  curve25519: string;
-  /** EC signing */
-  ed25519: string;
 }
 
 export class EncryptionService {
@@ -79,7 +72,7 @@ export class EncryptionService {
       this.account = vodozemac.Account.from_pickle(accountCrypto.accountPickle, this.pickleKey);
     } else {
       this.account = new vodozemac.Account();
-      this.pickleKey = new Crypto().getRandomValues(new Uint8Array(32));
+      this.pickleKey = crypto.getRandomValues(new Uint8Array(32));
       await storageService.storeCrypto({
         userId: this.id,
         accountPickle: this.account.pickle(this.pickleKey),
@@ -210,5 +203,9 @@ export class EncryptionService {
     })
   }
 
+  async checkMessage(messageId: string) {
+    const message = await storageService.getMessage(messageId);
+    return !!message;
+  }
   // TODO: implement MEGOLM for groups
 }
