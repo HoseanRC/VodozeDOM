@@ -202,15 +202,29 @@ export class KeyExchangeHandler {
     }
   }
 
+  private cachedSessions: {
+    [peerUserId: string]: {
+      hasSession: boolean,
+      lastUpdate: number,
+    }
+  } = {};
   async hasSession(peerUserId: string): Promise<boolean> {
     console.debug(`hasSession: ${peerUserId} > ${this.currentUserId}`);
     if (peerUserId == this.currentUserId) return true;
+    if ((this.cachedSessions[peerUserId]?.lastUpdate + 3000) > Date.now())
+      return this.cachedSessions[peerUserId].hasSession;
+
     try {
       const response: any = await sendMessageAndWait({
         type: 'BALE_CHECK_SESSION',
         data: { peerUserId },
         requestId: generateRequestId()
       });
+
+      this.cachedSessions[peerUserId] = {
+        hasSession: response?.data?.exists === true,
+        lastUpdate: Date.now(),
+      }
 
       return response?.data?.exists === true;
     } catch {

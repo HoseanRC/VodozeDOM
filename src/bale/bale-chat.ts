@@ -335,9 +335,6 @@ export class BaleChatManager {
       } else if (parsed.type === 'key_share') {
         this.encryptionButtonPeerId = null;
         console.log("Matrixify: received key share request.");
-        console.debug(parsed.identityKey, parsed.oneTimeKey, parsed.senderUserId, parsed.type);
-        console.debug(this.getCurrentUserId());
-        console.debug(await this.keyExchangeHandler.hasSession(parsed.senderUserId));
         if (parsed.senderUserId === this.getCurrentUserId()) {
           console.log("Matrixify: this is our own key share request. aborting");
           element.getElementsByClassName("p")[0].textContent = "🔑 Key exchange request sent";
