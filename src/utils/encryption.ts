@@ -1,17 +1,17 @@
 import { storageService } from './storage';
 import * as vodozemac from '../vodozemac';
 
-export function stringToUint8Array(str: string) {
-  const out = new Uint8Array(str.length);
-  for (let i = 0; i < str.length; i++) {
-    out[i] = str.charCodeAt(i);
-  }
-  return out;
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+export function stringToUint8Array(str: string): Uint8Array {
+  return encoder.encode(str); // UTF-8
 }
 
-export function uInt8ArrayToString(arr: Uint8Array) {
-  return String.fromCharCode(...arr);
+export function uInt8ArrayToString(arr: Uint8Array): string {
+  return decoder.decode(arr); // UTF-8
 }
+
 
 export class EncryptionService {
   static preKeyInitialMessage = "🔑 Encryption works!";
@@ -106,13 +106,16 @@ export class EncryptionService {
     * @param otk the one time key
     * @returns first encrypted message sent to establish full connection
     */
-  async createSessionFromOTK(peerUserId: string, identityKey: string, otk: string) {
+  async createSessionFromOTK(peerUserId: string, identityKey: string, otk: string): Promise<{
+    ciphertext: string,
+    message_type: number,
+  } | undefined> {
     if (!this.account) return;
     const session = this.account.create_outbound_session(identityKey, otk);
     const preKeyMessage = session.encrypt(stringToUint8Array(EncryptionService.preKeyInitialMessage));
     this.rePickleSession(peerUserId, session);
     this.rePickleAccount();
-    return preKeyMessage;
+    return { ciphertext: preKeyMessage.ciphertext, message_type: preKeyMessage.message_type };
   }
 
   /**
@@ -206,6 +209,11 @@ export class EncryptionService {
   async checkMessage(messageId: string) {
     const message = await storageService.getMessage(messageId);
     return !!message;
+  }
+
+  async hasSession(peerUserId: string) {
+    const session = await storageService.getSession(peerUserId);
+    return !!session;
   }
   // TODO: implement MEGOLM for groups
 }

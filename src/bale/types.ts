@@ -16,9 +16,10 @@ export interface KeyShareMessage {
 export interface EncryptedChatMessage {
   type: 'olm';
   senderUserId: string;
-  ciphertext: {
-    type: number;
-    body: string;
+  identityKey?: string;
+  cipher: {
+    message_type: number;
+    ciphertext: string;
   };
 }
 

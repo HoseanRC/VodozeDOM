@@ -68,6 +68,9 @@ class BackgroundService {
         case 'BALE_CHECK_MESSAGE':
           await this.handleBaleCheckMessage(message, sender);
           break;
+        case 'BALE_CHECK_SESSION':
+          await this.handleBaleCheckSession(message, sender);
+          break;
         default:
           console.warn('Unknown message type:', message.type);
       }
@@ -401,6 +404,38 @@ class BackgroundService {
       const { messageId } = message.data;
 
       const exists = await encryptionService.checkMessage(messageId);
+
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: true,
+          exists
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    } catch (error) {
+      const response: ExtensionMessage = {
+        type: 'KEYS_RESULT',
+        data: {
+          success: false,
+          error: (error as Error).message
+        },
+        requestId: message.requestId
+      };
+
+      this.sendResponse(sender.tab?.id, response);
+    }
+  }
+
+  private async handleBaleCheckSession(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+    try {
+      const { peerUserId } = message.data;
+
+      const exists = await encryptionService.hasSession(peerUserId);
+
+      console.debug(`check session: ${peerUserId}, ${exists}`);
 
       const response: ExtensionMessage = {
         type: 'KEYS_RESULT',

@@ -1,19 +1,21 @@
 import { KeyExchangeHandler } from './KeyExchangeHandler';
-import { EncryptionState } from './types';
-import { EncryptionToggle } from '../components/EncryptionToggle';
+import { EncryptionToggle, EncryptionMode } from '../components/EncryptionToggle';
+import { EncryptedChatMessage, KeyShareMessage } from './types';
 
 export class BaleChatManager {
   private keyExchangeHandler: KeyExchangeHandler;
-  private encryptionToggle: any;
+  private encryptionToggle: EncryptionToggle | null = null;
+  private mainWrapperObserver: MutationObserver | null = null;
+  private chatFooterObserver: MutationObserver | null = null;
   private messageListObserver: MutationObserver | null = null;
-  private inputObserver: MutationObserver | null = null;
   private sendButtonObserver: MutationObserver | null = null;
   private clonedSendButton: HTMLElement | null = null;
   private originalSendButton: HTMLElement | null = null;
+  private messageList: HTMLElement | null = null;
   private currentChatId: string | null = null;
   private currentPeerUserId: string | null = null;
-  private isProcessing = false;
-  private messageElements = new Set<HTMLElement>();
+  private messageElements = new Set<string>();
+  private encryptionButtonPeerId: string | null = null;
 
   constructor() {
     const userId = this.getCurrentUserId() || '';
@@ -23,14 +25,11 @@ export class BaleChatManager {
   async initialize(): Promise<void> {
     this.currentChatId = this.detectChatId();
     if (!this.currentChatId) {
-      console.log('Not on a bale.ai chat page');
       return;
     }
 
     this.currentPeerUserId = this.currentChatId;
-    this.observeMessageList();
-    this.observeInputField();
-    this.observeSendButton();
+    this.attachMainWrapperObserver();
   }
 
   private detectChatId(): string | null {
@@ -47,67 +46,110 @@ export class BaleChatManager {
     }
   }
 
-  private attachEncryptionToggle(): void {
-    const chatId = this.currentChatId || 'unknown';
-    const toggle = new EncryptionToggle(chatId);
-    this.encryptionToggle = toggle;
+  private attachMainWrapperObserver(): void {
+    const mainWrapper = document.getElementById('app_main_wrapper');
+    if (!mainWrapper) {
+      console.log("Matrixify: main wrapper not found");
+      setTimeout(() => this.attachMainWrapperObserver(), 500);
+      return;
+    }
+    console.log("Matrixify: main wrapper found. ataching...");
 
-    toggle.onStateChange((newState: EncryptionState) => {
-      this.handleStateChange(newState);
+    this.mainWrapperObserver = new MutationObserver(() => {
+      this.checkAndAttachChildren();
     });
 
-    const body = document.body;
-    if (body) {
-      toggle.mount(body);
-    }
+    this.mainWrapperObserver.observe(mainWrapper, {
+      childList: true,
+      subtree: true
+    });
+
+    this.checkAndAttachChildren();
   }
 
-  private async handleStateChange(newState: EncryptionState): Promise<void> {
-    if (newState === 'init') {
-      await this.initiateKeyExchange();
-    }
+  private checkAndAttachChildren(): void {
+    this.attachChatFooterObserver();
+    this.attachMessageListObserver();
   }
 
-  private async initiateKeyExchange(): Promise<void> {
-    if (!this.currentPeerUserId) return;
+  private detachAll(): void {
+    if (this.mainWrapperObserver) {
+      this.mainWrapperObserver.disconnect();
+      this.mainWrapperObserver = null;
+    }
+    this.detachChatFooterObserver();
+    this.detachMessageListObserver();
+    this.detachSendButtonObserver();
+    this.detachEncryptionToggle();
+  }
 
-    const sendMessage = (_text: string) => {
-      const input = document.getElementById('editable-message-text') as HTMLElement;
-      if (input) {
-        input.innerText = _text;
-        this.triggerSend();
-      }
-    };
+  private async checkSessionAndAttachToggle(): Promise<void> {
+    if (this.encryptionButtonPeerId == this.currentPeerUserId) return;
+    const hasSession = await this.keyExchangeHandler.hasSession(this.currentPeerUserId || '');
+    console.debug(`attaching toggle: ${this.currentPeerUserId} ${hasSession}`);
 
-    const success = await this.keyExchangeHandler.initiateKeyExchange(
-      this.currentPeerUserId,
-      sendMessage
-    );
-
-    if (success) {
-      this.encryptionToggle.setState('on');
+    if (hasSession) {
+      this.attachEncryptionToggle('on', false);
     } else {
-      alert('Failed to initiate key exchange');
+      this.attachEncryptionToggle('off', true);
     }
+
+    this.encryptionButtonPeerId = this.currentPeerUserId;
   }
 
-  private observeMessageList(): void {
-    const messageList = document.getElementById('message_list_scroller_id');
-    if (!messageList) {
-      console.log('Message list not found, waiting...');
-      setTimeout(() => this.observeMessageList(), 1000);
+  private attachChatFooterObserver(): void {
+    const chatFooter = document.getElementById('chat_footer');
+    if (!chatFooter) {
+      this.detachChatFooterObserver();
       return;
     }
 
-    if (this.messageListObserver) {
-      this.messageListObserver.disconnect();
+
+    this.chatFooterObserver = new MutationObserver(() => {
+      const currentFooter = document.getElementById('chat_footer');
+      if (!currentFooter) {
+        this.detachChatFooterObserver();
+        return;
+      }
+      this.attachSendButtonObserver();
+    });
+
+    this.chatFooterObserver.observe(chatFooter, {
+      childList: true,
+      subtree: true
+    });
+
+    this.attachSendButtonObserver();
+    this.checkSessionAndAttachToggle();
+  }
+
+  private detachChatFooterObserver(): void {
+    if (this.chatFooterObserver) {
+      console.log("Matrixify: detaching from chat footer...");
+      this.chatFooterObserver.disconnect();
+      this.chatFooterObserver = null;
     }
+    this.detachSendButtonObserver();
+  }
+
+  private attachMessageListObserver(): void {
+    if (this.messageList && this.messageList.parentElement) return;
+    const messageList = document.getElementById('message_list_scroller_id');
+    if (!messageList) return;
+
+    this.messageList = messageList;
+
+    this.detachMessageListObserver();
+    console.log("Matrixify: attaching message list...");
 
     this.messageListObserver = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
           if (node instanceof HTMLElement) {
             this.processMessageElement(node);
+          }
+          if (node.nodeType === Node.TEXT_NODE && node.parentElement) {
+            this.processMessageElement(node.parentElement);
           }
         });
       });
@@ -118,27 +160,139 @@ export class BaleChatManager {
       subtree: true
     });
 
-    console.log('Message list observer attached');
+    Array.from(messageList.children).forEach(element => {
+      if (!(element instanceof HTMLElement)) return;
+      this.processMessageElement(element);
+    });
+  }
+
+  private detachMessageListObserver(): void {
+    console.log("Matrixify: deattaching message list...");
+    if (this.messageListObserver) {
+      this.messageListObserver.disconnect();
+      this.messageListObserver = null;
+    }
+  }
+
+  private attachSendButtonObserver(): void {
+    if (this.originalSendButton && this.originalSendButton.parentElement) return;
+    const sendButton = document.querySelector('[aria-label="send-button"]') as HTMLElement;
+    if (!sendButton) return;
+
+    this.detachSendButtonObserver();
+
+    this.originalSendButton = sendButton;
+
+    this.sendButtonObserver = new MutationObserver(() => {
+      const currentButton = document.querySelector('[aria-label="send-button"]') as HTMLElement;
+      if (!currentButton || currentButton !== this.originalSendButton) {
+        console.log("Matrixify: reattaching send button...");
+        this.attachSendButtonObserver();
+        return;
+      }
+      this.syncButtonStyles();
+    });
+
+    console.log("Matrixify: attaching send button...");
+
+    this.sendButtonObserver.observe(sendButton, {
+      attributes: true,
+      attributeFilter: ['style', 'class', 'hidden', 'visibility']
+    });
+
+    this.cloneSendButton();
+  }
+
+  private detachSendButtonObserver(): void {
+    if (this.sendButtonObserver) {
+      console.log("Matrixify: detaching from send button...");
+      this.sendButtonObserver.disconnect();
+      this.sendButtonObserver = null;
+    }
+    if (this.originalSendButton && this.originalSendButton.parentElement) {
+      this.originalSendButton.innerHTML = '';
+    }
+    if (this.clonedSendButton && this.clonedSendButton.parentElement) {
+      this.clonedSendButton.remove();
+      this.clonedSendButton = null;
+    }
+    this.originalSendButton = null;
+  }
+
+  private syncButtonStyles(): void {
+    if (!this.originalSendButton || !this.clonedSendButton) return;
+
+    const originalStyle = this.originalSendButton.getAttribute('style') || '';
+    this.clonedSendButton.setAttribute('style', originalStyle);
+  }
+
+  private cloneSendButton(): void {
+    const sendButton = this.originalSendButton;
+    if (!sendButton) return;
+
+    if (this.clonedSendButton && this.clonedSendButton.parentElement) {
+      this.clonedSendButton.remove();
+    }
+
+    this.clonedSendButton = sendButton.cloneNode(true) as HTMLElement;
+    this.clonedSendButton.id = 'matrixify-cloned-send-button';
+
+    sendButton.parentElement?.appendChild(this.clonedSendButton);
+    this.clonedSendButton.addEventListener('click', () => this.handleSend());
+
+    sendButton.innerHTML = '';
+  }
+
+  private attachEncryptionToggle(initialMode: EncryptionMode, needsKeyExchange: boolean): void {
+    const chatId = this.currentChatId || 'unknown';
+    if (this.encryptionToggle && document.body.contains(this.encryptionToggle.getElement())) {
+      this.encryptionToggle.setMode(initialMode);
+      this.encryptionToggle.setNeedsKeyExchange(needsKeyExchange);
+      return;
+    }
+
+    this.detachEncryptionToggle();
+
+    const toggle = new EncryptionToggle(chatId, initialMode, needsKeyExchange);
+    this.encryptionToggle = toggle;
+
+    toggle.setKeyExchangeCallback(async () => {
+      await this.initiateKeyExchange();
+    });
+
+    toggle.mount();
+  }
+
+  private detachEncryptionToggle(): void {
+    if (this.encryptionToggle) {
+      this.encryptionToggle.unmount();
+      this.encryptionToggle = null;
+    }
   }
 
   private processMessageElement(element: HTMLElement): void {
-    if (element.classList.contains('message-item') && !element.dataset.matrixifyProcessed) {
-      const sid = element.dataset.sid;
-      if (!sid) return;
+    const messageItem = element.closest('.message-item') as HTMLElement;
+    if (!messageItem) return;
+    if (!messageItem.classList.contains('message-item')) return;
 
-      const [messageId, senderId] = sid.split('-');
-      this.currentPeerUserId = senderId;
+    const sid = messageItem.dataset.sid;
+    if (!sid) return;
+    if (messageItem.dataset.matrixifyProcessed) return;
 
-      const span = element.querySelector('span.p');
-      if (!span) return;
+    const sliced_sid = sid.split('-');
+    const messageId = sliced_sid.slice(0, sliced_sid.length - 1).join("-");
+    const senderId = sliced_sid[sliced_sid.length - 1];
+    this.currentPeerUserId = senderId;
 
-      const rawText = span.textContent || '';
+    const span = messageItem.querySelector('span.p');
+    if (!span) return;
 
-      if (this.messageElements.has(element)) return;
-      this.messageElements.add(element);
+    const rawText = span.textContent || '';
+    const messageKey = `${messageId}-${senderId}`;
+    if (this.messageElements.has(messageKey)) return;
+    this.messageElements.add(messageKey);
 
-      this.decryptMessage(element, messageId, senderId, rawText);
-    }
+    this.decryptMessage(messageItem, messageId, senderId, rawText);
   }
 
   private async decryptMessage(
@@ -148,35 +302,62 @@ export class BaleChatManager {
     rawText: string
   ): Promise<void> {
     try {
-      const parsed = JSON.parse(rawText);
+      const parsed = JSON.parse(rawText) as EncryptedChatMessage | KeyShareMessage;
 
       if (parsed.type === 'olm') {
-        const decrypted = await this.keyExchangeHandler.decryptMessage(
-          senderId,
-          messageId,
-          parsed.ciphertext.type,
-          parsed.ciphertext.body
-        );
+        if (parsed.cipher.message_type === 1) {
+          const decrypted = await this.keyExchangeHandler.decryptMessage(
+            senderId,
+            messageId,
+            parsed.cipher.message_type,
+            parsed.cipher.ciphertext
+          );
 
-        if (decrypted) {
-          const span = element.querySelector('span.p');
-          if (span) {
-            span.textContent = decrypted;
-            this.colorMessage(element, 'green');
+          if (decrypted) {
+            const span = element.querySelector('span.p');
+            if (span) {
+              span.textContent = decrypted;
+              this.colorMessage(element, 'green');
+            }
+          } else {
+            this.showError(element, 'message decryption failed');
+            this.colorMessage(element, 'red');
           }
         } else {
-          this.showError(element, 'message decryption failed');
-          this.colorMessage(element, 'red');
+          if (parsed.senderUserId === this.getCurrentUserId()) {
+            this.colorMessage(element, 'green');
+            element.getElementsByClassName("p")[0].textContent = "🔑 Encryption established";
+          } else {
+            await this.keyExchangeHandler.handlePreKeyMessage(parsed, parsed.senderUserId);
+            this.encryptionButtonPeerId = null;
+          }
         }
       } else if (parsed.type === 'key_share') {
+        this.encryptionButtonPeerId = null;
+        console.log("Matrixify: received key share request.");
+        console.debug(parsed.identityKey, parsed.oneTimeKey, parsed.senderUserId, parsed.type);
+        console.debug(this.getCurrentUserId());
+        console.debug(await this.keyExchangeHandler.hasSession(parsed.senderUserId));
+        if (parsed.senderUserId === this.getCurrentUserId()) {
+          console.log("Matrixify: this is our own key share request. aborting");
+          element.getElementsByClassName("p")[0].textContent = "🔑 Key exchange request sent";
+          this.colorMessage(element, 'blue');
+          return;
+        } else if (await this.keyExchangeHandler.hasSession(parsed.senderUserId)) {
+          element.getElementsByClassName("p")[0].textContent = "🔑 Key exchange request received";
+          this.colorMessage(element, 'yellow');
+          return;
+        }
         const success = await this.keyExchangeHandler.handleKeyShare(
           parsed,
           senderId,
           (text: string) => {
+            console.log("Matrixify: handling key share succeeded.");
+            this.colorMessage(element, 'blue');
             const input = document.getElementById('editable-message-text') as HTMLElement;
             if (input) {
               input.innerText = text;
-              this.triggerSend();
+              this.handleSend(true);
             }
           }
         );
@@ -195,10 +376,11 @@ export class BaleChatManager {
         );
 
         if (success) {
-          this.encryptionToggle.setState('on');
+          this.encryptionToggle?.setMode('on');
+          this.encryptionToggle?.setNeedsKeyExchange(false);
           const span = element.querySelector('span.p');
           if (span) {
-            span.textContent = '🔐 Encryption enabled';
+            span.textContent = 'Encryption enabled';
             this.colorMessage(element, 'green');
           }
         } else {
@@ -211,8 +393,8 @@ export class BaleChatManager {
     }
   }
 
-  private isPreKeyMessage(parsed: any): boolean {
-    return parsed.type === 'olm' && parsed.ciphertext && typeof parsed.ciphertext.type === 'number';
+  private isPreKeyMessage(parsed: EncryptedChatMessage): boolean {
+    return parsed.type === 'olm' && !!parsed.cipher.ciphertext && parsed.cipher.message_type === 0;
   }
 
   private showError(element: HTMLElement, text: string): void {
@@ -226,7 +408,7 @@ export class BaleChatManager {
   }
 
   private colorMessage(element: HTMLElement, color: 'red' | 'blue' | 'green' | 'yellow'): void {
-    const messageBlock = element.querySelector('.message-block') as HTMLElement || element.firstElementChild as HTMLElement;
+    const messageBlock = element.querySelector(':scope > div') as HTMLElement || element.firstElementChild as HTMLElement;
     if (!messageBlock) return;
 
     const colors = {
@@ -239,170 +421,77 @@ export class BaleChatManager {
     messageBlock.style.backgroundColor = colors[color];
   }
 
-  private observeInputField(): void {
-    const input = document.getElementById('editable-message-text') as HTMLElement;
-    if (!input) {
-      setTimeout(() => this.observeInputField(), 1000);
+  private async handleSend(raw?: boolean): Promise<void> {
+    if (raw) {
+      this.originalSendButton?.click();
       return;
     }
-
-    this.attachEncryptionToggle();
-
-    if (this.inputObserver) {
-      this.inputObserver.disconnect();
-    }
-
-    this.inputObserver = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'innerText') {
-          this.handleInputTextChange();
-        }
-      });
-    });
-
-    this.inputObserver.observe(input, {
-      attributes: true,
-      attributeFilter: ['innerText']
-    });
-
-    input.addEventListener('keydown', (e) => this.handleKeyPress(e));
-  }
-
-  private handleKeyPress(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      this.handleSend();
-    }
-  }
-
-  private handleInputTextChange(): void {
-    if (this.isProcessing) return;
-    this.isProcessing = true;
-
-    const input = document.getElementById('editable-message-text') as HTMLElement;
-    if (!input) {
-      this.isProcessing = false;
-      return;
-    }
-
-    setTimeout(() => {
-      this.isProcessing = false;
-    }, 100);
-  }
-
-  private async handleSend(): Promise<void> {
     const input = document.getElementById('editable-message-text') as HTMLElement;
     if (!input) return;
 
     const text = input.innerText;
     if (!text.trim()) return;
 
-    const state = this.encryptionToggle.getState();
+    const mode = this.encryptionToggle?.getMode() || 'off';
 
-    if (state === 'on') {
-      const encrypted = await this.keyExchangeHandler.encryptMessage(
-        this.currentPeerUserId || '',
-        text
-      );
+    if (mode === 'on') {
+      try {
+        const encrypted = await this.keyExchangeHandler.encryptMessage(
+          this.currentPeerUserId || '',
+          text
+        );
 
-      if (encrypted) {
-        input.innerText = encrypted;
-        this.triggerSend();
-      } else {
+        if (encrypted) {
+          input.innerText = encrypted;
+          this.originalSendButton?.click();
+        } else {
+          const originalText = text;
+          input.innerText = '';
+          setTimeout(() => {
+            input.innerText = originalText;
+            alert('Encryption failed');
+          }, 100);
+        }
+      } catch {
         const originalText = text;
         input.innerText = '';
         setTimeout(() => {
           input.innerText = originalText;
           alert('Encryption failed');
-        }, 1000);
+        }, 100);
       }
     } else {
-      this.triggerSend();
+      this.originalSendButton?.click();
     }
   }
 
-  private triggerSend(): void {
-    const sendButton = document.querySelector('[aria-label="send-button"]') as HTMLElement;
-    if (sendButton) {
-      sendButton.click();
+  private async initiateKeyExchange(): Promise<void> {
+    if (!this.currentPeerUserId) return;
+
+    const sendMessage = (text: string) => {
+      const input = document.getElementById('editable-message-text') as HTMLElement;
+      if (input) {
+        input.innerText = text;
+        this.handleSend();
+      }
+    };
+
+    const success = await this.keyExchangeHandler.initiateKeyExchange(
+      this.currentPeerUserId,
+      sendMessage
+    );
+
+    if (success) {
+      this.encryptionToggle?.setMode('on');
+      this.encryptionToggle?.setNeedsKeyExchange(false);
+    } else {
+      alert('Failed to initiate key exchange');
+      this.encryptionToggle?.setMode('off');
+      this.encryptionToggle?.setNeedsKeyExchange(true);
     }
-  }
-
-  private observeSendButton(): void {
-    const sendButton = document.querySelector('[aria-label="send-button"]') as HTMLElement;
-    if (!sendButton) {
-      setTimeout(() => this.observeSendButton(), 1000);
-      return;
-    }
-
-    this.originalSendButton = sendButton;
-
-    if (this.sendButtonObserver) {
-      this.sendButtonObserver.disconnect();
-    }
-
-    this.sendButtonObserver = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-          this.syncButtonStyles();
-        }
-      });
-    });
-
-    this.sendButtonObserver.observe(sendButton, {
-      attributes: true,
-      attributeFilter: ['style']
-    });
-
-    this.cloneSendButton();
-  }
-
-  private cloneSendButton(): void {
-    if (!this.originalSendButton) return;
-
-    const parent = this.originalSendButton.parentElement;
-    if (!parent) return;
-
-    this.clonedSendButton = this.originalSendButton.cloneNode(true) as HTMLElement;
-    this.clonedSendButton.style.display = 'none';
-    this.clonedSendButton.style.pointerEvents = 'none';
-    parent.appendChild(this.clonedSendButton);
-
-    this.clonedSendButton.addEventListener('click', () => this.handleSend());
-  }
-
-  private syncButtonStyles(): void {
-    if (!this.originalSendButton || !this.clonedSendButton) return;
-
-    const computedStyle = window.getComputedStyle(this.originalSendButton);
-    const style = this.clonedSendButton.style;
-
-    style.display = computedStyle.display;
-    style.pointerEvents = computedStyle.pointerEvents;
-    style.opacity = computedStyle.opacity;
-    style.visibility = computedStyle.visibility;
-    style.width = computedStyle.width;
-    style.height = computedStyle.height;
-    style.backgroundColor = computedStyle.backgroundColor;
-    style.color = computedStyle.color;
-    style.border = computedStyle.border;
-    style.borderRadius = computedStyle.borderRadius;
-    style.boxShadow = computedStyle.boxShadow;
-    style.cursor = computedStyle.cursor;
   }
 
   public destroy(): void {
-    if (this.messageListObserver) {
-      this.messageListObserver.disconnect();
-    }
-    if (this.inputObserver) {
-      this.inputObserver.disconnect();
-    }
-    if (this.sendButtonObserver) {
-      this.sendButtonObserver.disconnect();
-    }
-    if (this.encryptionToggle) {
-      this.encryptionToggle.unmount();
-    }
+    this.detachAll();
   }
 }

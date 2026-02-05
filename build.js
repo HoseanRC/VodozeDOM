@@ -30,40 +30,6 @@ async function buildExtension() {
     await build(viteConfig)
     console.log('✓ Built JavaScript files')
     
-    // Create manifest for dist
-    const distManifest = {
-      manifest_version: 3,
-      name: "Matrixify",
-      version: "1.0.0",
-      description: "End-to-end encryption for web chat messages",
-      permissions: ["activeTab", "storage"],
-      host_permissions: ["<all_urls>"],
-      background: {
-        service_worker: "background.js"
-      },
-      content_scripts: [{
-        matches: ["<all_urls>"],
-        js: ["content.js"],
-        css: ["content.css"]
-      }],
-      web_accessible_resources: [{
-        resources: ["assets/*"],
-        matches: ["<all_urls>"]
-      }],
-      action: {
-        default_popup: "popup.html",
-        default_title: "Matrixify"
-      }
-    }
-    
-    // Write manifest to dist
-/*
-    await import('fs/promises').then(fs => 
-      fs.writeFile('dist/manifest.json', JSON.stringify(distManifest, null, 2))
-    )
-*/
-    console.log('✓ Created manifest.json')
-    
     // Copy popup.html and replace script src
     let popupHtml = await import('fs/promises').then(fs => 
       fs.readFile('src/popup/popup.html', 'utf8')
