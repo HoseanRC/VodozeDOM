@@ -344,7 +344,10 @@ class BackgroundService {
         type: 'KEYS_RESULT',
         data: {
           success: true,
-          encryptedMessage
+          encryptedMessage: {
+            ciphertext: encryptedMessage?.ciphertext,
+            message_type: encryptedMessage?.message_type,
+          }
         },
         requestId: message.requestId
       };
