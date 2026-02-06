@@ -185,7 +185,7 @@ export class EncryptionService {
       const decryptedMessage = uInt8ArrayToString(session.decrypt(messageType, ciphertext));
       storageService.storeMessage({
         id: messageId,
-        plaintext: ciphertext,
+        plaintext: decryptedMessage,
         senderUserId: peerUserId,
         timestamp: Date.now()
       });
