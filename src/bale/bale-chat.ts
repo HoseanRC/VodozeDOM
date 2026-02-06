@@ -282,6 +282,7 @@ export class BaleChatManager {
     const sliced_sid = sid.split('-');
     const messageId = sliced_sid.slice(0, sliced_sid.length - 1).join("-");
     const senderId = sliced_sid[sliced_sid.length - 1];
+    if (senderId == this.getCurrentUserId()) return;
     this.currentPeerUserId = senderId;
 
     const span = messageItem.querySelector('span.p');

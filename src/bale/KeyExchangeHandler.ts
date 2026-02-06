@@ -206,27 +206,52 @@ export class KeyExchangeHandler {
     [peerUserId: string]: {
       hasSession: boolean,
       lastUpdate: number,
+      processing: boolean,
+    }
+  } = {};
+  private cacheQueue: {
+    [peerUserId: string]: {
+      resolves: ((hasSession: boolean) => void)[]
     }
   } = {};
   async hasSession(peerUserId: string): Promise<boolean> {
-    console.debug(`hasSession: ${peerUserId} > ${this.currentUserId}`);
     if (peerUserId == this.currentUserId) return true;
-    if ((this.cachedSessions[peerUserId]?.lastUpdate + 3000) > Date.now())
-      return this.cachedSessions[peerUserId].hasSession;
+    if ((this.cachedSessions[peerUserId]?.lastUpdate + 3000) > Date.now()) {
+      if (this.cachedSessions[peerUserId].processing) {
+        return await new Promise((resolve) => {
+          if (!this.cacheQueue[peerUserId]) this.cacheQueue[peerUserId] = { resolves: [] };
+          this.cacheQueue[peerUserId].resolves.push(resolve);
+        });
+      } else return this.cachedSessions[peerUserId].hasSession;
+    }
 
     try {
+      this.cachedSessions[peerUserId] = {
+        hasSession: false,
+        lastUpdate: Date.now(),
+        processing: true,
+      }
+
+      if (!this.cacheQueue[peerUserId]) this.cacheQueue[peerUserId] = { resolves: [] };
+
       const response: any = await sendMessageAndWait({
         type: 'BALE_CHECK_SESSION',
         data: { peerUserId },
         requestId: generateRequestId()
       });
 
+      const exists = response?.data?.exists === true;
+
       this.cachedSessions[peerUserId] = {
-        hasSession: response?.data?.exists === true,
+        hasSession: exists,
         lastUpdate: Date.now(),
+        processing: false,
       }
 
-      return response?.data?.exists === true;
+      this.cacheQueue[peerUserId].resolves.forEach(resolve => resolve(exists));
+      this.cacheQueue[peerUserId].resolves = [];
+
+      return exists;
     } catch {
       return false;
     }
