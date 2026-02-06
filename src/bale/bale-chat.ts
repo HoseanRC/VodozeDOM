@@ -40,7 +40,7 @@ export class BaleChatManager {
   private getCurrentUserId(): string | null {
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
-      return user.id || null;
+      return String(user.id) || null;
     } catch {
       return null;
     }
