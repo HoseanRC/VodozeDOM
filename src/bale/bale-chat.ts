@@ -282,8 +282,6 @@ export class BaleChatManager {
     const sliced_sid = sid.split('-');
     const messageId = sliced_sid.slice(0, sliced_sid.length - 1).join("-");
     const senderId = sliced_sid[sliced_sid.length - 1];
-    if (senderId == this.getCurrentUserId()) return;
-    this.currentPeerUserId = senderId;
 
     const span = messageItem.querySelector('span.p');
     if (!span) return;
@@ -330,6 +328,8 @@ export class BaleChatManager {
             element.getElementsByClassName("p")[0].textContent = "🔑 Encryption established";
           } else {
             await this.keyExchangeHandler.handlePreKeyMessage(parsed, parsed.senderUserId);
+            this.colorMessage(element, 'green');
+            element.getElementsByClassName("p")[0].textContent = "🔑 Encryption established";
             this.encryptionButtonPeerId = null;
           }
         }
@@ -349,22 +349,23 @@ export class BaleChatManager {
         const success = await this.keyExchangeHandler.handleKeyShare(
           parsed,
           senderId,
-          (text: string) => {
+          async (text: string) => {
             console.log("Matrixify: handling key share succeeded.");
             this.colorMessage(element, 'blue');
             const input = document.getElementById('editable-message-text') as HTMLElement;
             if (input) {
               input.innerText = text;
-              this.handleSend(true);
+              await this.handleSend(true);
+              input.innerText = "";
             }
           }
         );
 
         if (success) {
+          this.colorMessage(element, 'yellow');
           const span = element.querySelector('span.p');
           if (span) {
             span.textContent = '🔑 Key exchange request received';
-            this.colorMessage(element, 'yellow');
           }
         }
       } else if (this.isPreKeyMessage(parsed)) {
@@ -471,6 +472,7 @@ export class BaleChatManager {
       if (input) {
         input.innerText = text;
         this.handleSend();
+        input.innerText = "";
       }
     };
 
