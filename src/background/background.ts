@@ -2,6 +2,7 @@ import { ExtensionMessage } from '../types';
 import { EncryptionService } from '../utils/encryption';
 import vodozemacWasm from "../vodozemac/vodozemac_bg.wasm?url";
 import vodozemac from "../vodozemac";
+import { storageService } from '../utils/storage';
 
 const encryptionService = new EncryptionService('background-service');
 
@@ -369,14 +370,26 @@ class BackgroundService {
 
   private async handleBaleDecrypt(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
-      const { peerUserId, messageId, messageType, ciphertext } = message.data;
+      const { peerUserId, messageId, messageType, ciphertext, lastSendMessage } = message.data;
 
-      const decryptedMessage = await encryptionService.decryptMessage(
-        peerUserId,
-        messageId,
-        messageType,
-        ciphertext
-      );
+      let decryptedMessage: string | undefined = undefined;
+
+      if (typeof lastSendMessage === 'string') {
+        storageService.storeMessage({
+          id: messageId,
+          senderUserId: peerUserId,
+          plaintext: lastSendMessage,
+          timestamp: Date.now()
+        });
+        decryptedMessage = lastSendMessage;
+      } else {
+        decryptedMessage = await encryptionService.decryptMessage(
+          peerUserId,
+          messageId,
+          messageType,
+          ciphertext
+        );
+      }
 
       const response: ExtensionMessage = {
         type: 'KEYS_RESULT',

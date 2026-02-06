@@ -164,7 +164,8 @@ export class KeyExchangeHandler {
     peerUserId: string,
     messageId: string,
     messageType: number,
-    ciphertext: string
+    ciphertext: string,
+    lastSendMessage: string | null,
   ): Promise<string | null> {
     try {
       const response: any = await sendMessageAndWait({
@@ -173,7 +174,8 @@ export class KeyExchangeHandler {
           peerUserId,
           messageId,
           messageType,
-          ciphertext
+          ciphertext,
+          lastSendMessage
         },
         requestId: generateRequestId()
       });

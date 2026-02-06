@@ -16,6 +16,7 @@ export class BaleChatManager {
   private currentPeerUserId: string | null = null;
   private messageElements = new Set<string>();
   private encryptionButtonPeerId: string | null = null;
+  private lastSendMessage: string | null = null;
 
   constructor() {
     const userId = this.getCurrentUserId() || '';
@@ -309,8 +310,10 @@ export class BaleChatManager {
             senderId,
             messageId,
             parsed.cipher.message_type,
-            parsed.cipher.ciphertext
+            parsed.cipher.ciphertext,
+            this.lastSendMessage
           );
+          this.lastSendMessage = null;
 
           if (decrypted) {
             const span = element.querySelector('span.p');
@@ -428,8 +431,8 @@ export class BaleChatManager {
     const input = document.getElementById('editable-message-text') as HTMLElement;
     if (!input) return;
 
-    const text = input.innerText;
-    if (!text.trim()) return;
+    const originalText = input.innerText;
+    if (!originalText.trim()) return;
 
     const mode = this.encryptionToggle?.getMode() || 'off';
 
@@ -437,14 +440,14 @@ export class BaleChatManager {
       try {
         const encrypted = await this.keyExchangeHandler.encryptMessage(
           this.currentPeerUserId || '',
-          text
+          originalText
         );
 
         if (encrypted) {
           input.innerText = encrypted;
+          this.lastSendMessage = originalText;
           this.originalSendButton?.click();
         } else {
-          const originalText = text;
           input.innerText = '';
           setTimeout(() => {
             input.innerText = originalText;
@@ -452,7 +455,6 @@ export class BaleChatManager {
           }, 100);
         }
       } catch {
-        const originalText = text;
         input.innerText = '';
         setTimeout(() => {
           input.innerText = originalText;
