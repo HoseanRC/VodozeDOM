@@ -126,12 +126,22 @@ export class EncryptionService {
    * @param ciphertext ciphertext part of the message
    * @returns `string` sent as the prekey message
    */
-  async createSessionFromPreKey(peerUserId: string, identityKey: string, messageType: number, ciphertext: string) {
+  async createSessionFromPreKey(peerUserId: string, identityKey: string, messageId: string, messageType: number, ciphertext: string) {
     if (!this.account) return;
+    const storedMessage = await storageService.getMessage(messageId);
+    if (storedMessage) {
+      return storedMessage.plaintext;
+    }
     const preKeyMessage = this.account.create_inbound_session(identityKey, messageType, ciphertext);
     const plaintext = uInt8ArrayToString(preKeyMessage.plaintext);
     this.rePickleSession(peerUserId, preKeyMessage.session);
     this.rePickleAccount();
+    storageService.storeMessage({
+      id: messageId,
+      plaintext,
+      senderUserId: peerUserId,
+      timestamp: Date.now()
+    });
     return plaintext;
   }
 

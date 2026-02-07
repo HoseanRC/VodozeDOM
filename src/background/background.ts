@@ -163,11 +163,12 @@ class BackgroundService {
 
   private async handleBaleCreateSessionFromPrekey(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
-      const { peerUserId, identityKey, messageType, ciphertext } = message.data;
+      const { peerUserId, identityKey, messageId, messageType, ciphertext } = message.data;
 
       const result = await encryptionService.createSessionFromPreKey(
         peerUserId,
         identityKey,
+        messageId,
         messageType,
         ciphertext
       );

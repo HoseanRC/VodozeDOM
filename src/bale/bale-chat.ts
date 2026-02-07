@@ -295,6 +295,7 @@ export class BaleChatManager {
     const sid = messageItem.dataset.sid;
     if (!sid) return;
     if (messageItem.dataset.matrixifyProcessed) return;
+    messageItem.dataset.matrixifyProcessed = "true";
 
     const sliced_sid = sid.split('-');
     const messageId = sliced_sid.slice(0, sliced_sid.length - 1).join("-");
@@ -338,7 +339,7 @@ export class BaleChatManager {
             this.colorMessage(element, 'red');
           }
         } else {
-          const plaintext = await this.keyExchangeHandler.handlePreKeyMessage(parsed, parsed.senderUserId);
+          const plaintext = await this.keyExchangeHandler.handlePreKeyMessage(parsed, messageId, parsed.senderUserId);
           if (!plaintext) {
             this.colorMessage(element, 'red');
             element.getElementsByClassName("p")[0].textContent = "🔑 Failed to create session";
@@ -391,8 +392,6 @@ export class BaleChatManager {
       }
     } catch {
 
-    } finally {
-      element.dataset.matrixifyProcessed = 'true';
     }
   }
 

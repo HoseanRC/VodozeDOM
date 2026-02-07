@@ -109,7 +109,7 @@ export class KeyExchangeHandler {
     }
   }
 
-  async handlePreKeyMessage(encryptedMessage: EncryptedChatMessage, senderId: string): Promise<string | undefined> {
+  async handlePreKeyMessage(encryptedMessage: EncryptedChatMessage, messageId: string, senderId: string): Promise<string | undefined> {
     try {
       const { message_type, ciphertext } = encryptedMessage.cipher;
 
@@ -118,6 +118,7 @@ export class KeyExchangeHandler {
         data: {
           peerUserId: senderId,
           identityKey: encryptedMessage.identityKey,
+          messageId,
           messageType: message_type,
           ciphertext: ciphertext
         },
