@@ -460,7 +460,7 @@ export class BaleChatManager {
       const input = document.getElementById('editable-message-text') as HTMLElement;
       if (input) {
         input.innerText = text;
-        this.handleSend();
+        this.handleSend(true);
         input.innerText = "";
       }
     };
