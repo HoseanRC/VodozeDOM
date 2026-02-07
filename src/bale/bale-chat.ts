@@ -205,6 +205,7 @@ export class BaleChatManager {
       attributeFilter: ['style', 'class', 'hidden', 'visibility']
     });
 
+    this.attachEnterEvent();
     this.cloneSendButton();
   }
 
@@ -246,6 +247,18 @@ export class BaleChatManager {
     this.clonedSendButton.addEventListener('click', () => this.handleSend());
 
     sendButton.innerHTML = '';
+  }
+
+  private attachEnterEvent() {
+    const input = document.getElementById('editable-message-text') as HTMLElement;
+    if (input.dataset.matrixifyAttached) return;
+    input.addEventListener("keypress", (event) => {
+      if (event.key === 'Enter') {
+        this.handleSend();
+        input.innerText = "";
+      }
+    });
+    input.dataset.matrixifyAttached = "";
   }
 
   private attachEncryptionToggle(initialMode: EncryptionMode, needsKeyExchange: boolean): void {
@@ -434,6 +447,7 @@ export class BaleChatManager {
           input.innerText = encrypted;
           this.lastSendMessage = originalText;
           this.originalSendButton?.click();
+          input.innerText = '';
         } else {
           input.innerText = '';
           setTimeout(() => {
