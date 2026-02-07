@@ -61,8 +61,6 @@ export class EncryptionToggle {
   private async handleClick(): Promise<void> {
     if (this.isLockMode) {
       if (confirm('This will send your public key to start encrypted messaging. Continue?')) {
-        this.isLockMode = false;
-        this.updateIcon();
         if (this.keyExchangeCallback) {
           await this.keyExchangeCallback();
         }

@@ -312,7 +312,7 @@ class BackgroundService {
       const response: ExtensionMessage = {
         type: 'KEYS_RESULT',
         data: {
-          success: result === true
+          plainText: result
         },
         requestId: message.requestId
       };

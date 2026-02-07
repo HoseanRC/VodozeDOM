@@ -124,16 +124,15 @@ export class EncryptionService {
    * @param identityKey identityKey of the peer user
    * @param messageType type of the message (placed inside the message itself)
    * @param ciphertext ciphertext part of the message
-   * @returns `undefined` if it fails, `true` if it succeeds
+   * @returns `string` sent as the prekey message
    */
   async createSessionFromPreKey(peerUserId: string, identityKey: string, messageType: number, ciphertext: string) {
     if (!this.account) return;
     const preKeyMessage = this.account.create_inbound_session(identityKey, messageType, ciphertext);
-    if (uInt8ArrayToString(preKeyMessage.plaintext) != EncryptionService.preKeyInitialMessage)
-      return;
+    const plaintext = uInt8ArrayToString(preKeyMessage.plaintext);
     this.rePickleSession(peerUserId, preKeyMessage.session);
     this.rePickleAccount();
-    return true;
+    return plaintext;
   }
 
   /**

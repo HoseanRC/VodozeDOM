@@ -109,7 +109,7 @@ export class KeyExchangeHandler {
     }
   }
 
-  async handlePreKeyMessage(encryptedMessage: EncryptedChatMessage, senderId: string): Promise<boolean> {
+  async handlePreKeyMessage(encryptedMessage: EncryptedChatMessage, senderId: string): Promise<string | undefined> {
     try {
       const { message_type, ciphertext } = encryptedMessage.cipher;
 
@@ -124,9 +124,9 @@ export class KeyExchangeHandler {
         requestId: generateRequestId()
       });
 
-      return response?.data?.success === true;
+      return response?.data?.plainText;
     } catch {
-      return false;
+      return;
     }
   }
 

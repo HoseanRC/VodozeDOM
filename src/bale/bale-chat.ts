@@ -12,7 +12,6 @@ export class BaleChatManager {
   private clonedSendButton: HTMLElement | null = null;
   private originalSendButton: HTMLElement | null = null;
   private messageList: HTMLElement | null = null;
-  private currentChatId: string | null = null;
   private currentPeerUserId: string | null = null;
   private messageElements = new Set<string>();
   private encryptionButtonPeerId: string | null = null;
@@ -24,12 +23,11 @@ export class BaleChatManager {
   }
 
   async initialize(): Promise<void> {
-    this.currentChatId = this.detectChatId();
-    if (!this.currentChatId) {
+    this.currentPeerUserId = this.detectChatId();
+    if (!this.currentPeerUserId) {
       return;
     }
 
-    this.currentPeerUserId = this.currentChatId;
     this.attachMainWrapperObserver();
   }
 
@@ -92,7 +90,7 @@ export class BaleChatManager {
     if (hasSession) {
       this.attachEncryptionToggle('on', false);
     } else {
-      this.attachEncryptionToggle('off', true);
+      this.attachEncryptionToggle('on', true);
     }
 
     this.encryptionButtonPeerId = this.currentPeerUserId;
@@ -133,7 +131,7 @@ export class BaleChatManager {
     this.detachSendButtonObserver();
   }
 
-  private attachMessageListObserver(): void {
+  private async attachMessageListObserver() {
     if (this.messageList && this.messageList.parentElement) return;
     const messageList = document.getElementById('message_list_scroller_id');
     if (!messageList) return;
@@ -142,6 +140,12 @@ export class BaleChatManager {
 
     this.detachMessageListObserver();
     console.log("Matrixify: attaching message list...");
+
+    const chatId = this.detectChatId();
+    if (this.currentPeerUserId !== chatId) {
+      this.currentPeerUserId = chatId;
+      this.encryptionToggle?.setNeedsKeyExchange(this.currentPeerUserId ? (!await this.keyExchangeHandler.hasSession(this.currentPeerUserId)) : false);
+    }
 
     this.messageListObserver = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
@@ -245,7 +249,7 @@ export class BaleChatManager {
   }
 
   private attachEncryptionToggle(initialMode: EncryptionMode, needsKeyExchange: boolean): void {
-    const chatId = this.currentChatId || 'unknown';
+    const chatId = this.currentPeerUserId || 'unknown';
     if (this.encryptionToggle && document.body.contains(this.encryptionToggle.getElement())) {
       this.encryptionToggle.setMode(initialMode);
       this.encryptionToggle.setNeedsKeyExchange(needsKeyExchange);
@@ -305,7 +309,7 @@ export class BaleChatManager {
       const parsed = JSON.parse(rawText) as EncryptedChatMessage | KeyShareMessage;
 
       if (parsed.type === 'olm') {
-        if (parsed.cipher.message_type === 1) {
+        if (parsed.cipher.message_type === 1 || await this.keyExchangeHandler.hasSession(parsed.senderUserId)) {
           const decrypted = await this.keyExchangeHandler.decryptMessage(
             senderId,
             messageId,
@@ -326,18 +330,17 @@ export class BaleChatManager {
             this.colorMessage(element, 'red');
           }
         } else {
-          if (parsed.senderUserId === this.getCurrentUserId()) {
-            this.colorMessage(element, 'green');
-            element.getElementsByClassName("p")[0].textContent = "🔑 Encryption established";
+          const plaintext = await this.keyExchangeHandler.handlePreKeyMessage(parsed, parsed.senderUserId);
+          if (!plaintext) {
+            this.colorMessage(element, 'red');
+            element.getElementsByClassName("p")[0].textContent = "🔑 Failed to create session";
           } else {
-            await this.keyExchangeHandler.handlePreKeyMessage(parsed, parsed.senderUserId);
+            this.encryptionToggle?.setNeedsKeyExchange(false);
             this.colorMessage(element, 'green');
-            element.getElementsByClassName("p")[0].textContent = "🔑 Encryption established";
-            this.encryptionButtonPeerId = null;
+            element.getElementsByClassName("p")[0].textContent = plaintext;
           }
         }
       } else if (parsed.type === 'key_share') {
-        this.encryptionButtonPeerId = null;
         console.log("Matrixify: received key share request.");
         if (parsed.senderUserId === this.getCurrentUserId()) {
           console.log("Matrixify: this is our own key share request. aborting");
@@ -354,12 +357,18 @@ export class BaleChatManager {
           senderId,
           async (text: string) => {
             console.log("Matrixify: handling key share succeeded.");
+
+            this.encryptionToggle?.setNeedsKeyExchange(false);
+
             this.colorMessage(element, 'blue');
             const input = document.getElementById('editable-message-text') as HTMLElement;
             if (input) {
-              input.innerText = text;
-              await this.handleSend(true);
-              input.innerText = "";
+              setTimeout(async () => {
+                input.innerText = text;
+                await this.handleSend(true);
+                input.innerText = "";
+                this.lastSendMessage = "🔑 Encryption established";
+              }, 100);
             }
           }
         );
@@ -371,32 +380,10 @@ export class BaleChatManager {
             span.textContent = '🔑 Key exchange request received';
           }
         }
-      } else if (this.isPreKeyMessage(parsed)) {
-        const success = await this.keyExchangeHandler.handlePreKeyMessage(
-          parsed,
-          senderId
-        );
-
-        if (success) {
-          this.encryptionToggle?.setMode('on');
-          this.encryptionToggle?.setNeedsKeyExchange(false);
-          const span = element.querySelector('span.p');
-          if (span) {
-            span.textContent = 'Encryption enabled';
-            this.colorMessage(element, 'green');
-          }
-        } else {
-          this.showError(element, 'key exchange failed');
-          this.colorMessage(element, 'red');
-        }
       }
     } catch {
       element.dataset.matrixifyProcessed = 'true';
     }
-  }
-
-  private isPreKeyMessage(parsed: EncryptedChatMessage): boolean {
-    return parsed.type === 'olm' && !!parsed.cipher.ciphertext && parsed.cipher.message_type === 0;
   }
 
   private showError(element: HTMLElement, text: string): void {
@@ -483,10 +470,7 @@ export class BaleChatManager {
       sendMessage
     );
 
-    if (success) {
-      this.encryptionToggle?.setMode('on');
-      this.encryptionToggle?.setNeedsKeyExchange(false);
-    } else {
+    if (!success) {
       alert('Failed to initiate key exchange');
       this.encryptionToggle?.setMode('off');
       this.encryptionToggle?.setNeedsKeyExchange(true);
