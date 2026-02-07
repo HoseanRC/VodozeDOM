@@ -13,7 +13,6 @@ export class BaleChatManager {
   private originalSendButton: HTMLElement | null = null;
   private messageList: HTMLElement | null = null;
   private currentPeerUserId: string | null = null;
-  private messageElements = new Set<string>();
   private encryptionButtonPeerId: string | null = null;
   private lastSendMessage: string | null = null;
 
@@ -305,10 +304,6 @@ export class BaleChatManager {
     if (!span) return;
 
     const rawText = span.textContent || '';
-    const messageKey = `${messageId}-${senderId}`;
-    if (this.messageElements.has(messageKey)) return;
-    this.messageElements.add(messageKey);
-
     this.decryptMessage(messageItem, messageId, senderId, rawText);
   }
 
@@ -395,6 +390,8 @@ export class BaleChatManager {
         }
       }
     } catch {
+
+    } finally {
       element.dataset.matrixifyProcessed = 'true';
     }
   }
