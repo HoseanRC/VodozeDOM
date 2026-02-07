@@ -16,6 +16,6 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["chrome"]
   },
-  "include": ["src/**/*", "public/**/*"],
+  "include": ["src/**/*", "public/**/*", "vite-env.d.ts"],
   "exclude": ["node_modules", "dist"]
 }
