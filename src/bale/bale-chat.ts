@@ -332,7 +332,7 @@ export class BaleChatManager {
             const span = element.querySelector('span.p');
             if (span) {
               span.textContent = decrypted;
-              this.colorMessage(element, 'green');
+              this.colorMessage(element, 'blue');
             }
           } else {
             this.showError(element, 'message decryption failed');
@@ -345,20 +345,23 @@ export class BaleChatManager {
             element.getElementsByClassName("p")[0].textContent = "🔑 Failed to create session";
           } else {
             this.encryptionToggle?.setNeedsKeyExchange(false);
-            this.colorMessage(element, 'green');
+            this.colorMessage(element, 'blue');
             element.getElementsByClassName("p")[0].textContent = plaintext;
           }
+        }
+        if (senderId === this.getCurrentUserId()) {
+          this.colorMessage(element, 'green');
         }
       } else if (parsed.type === 'key_share') {
         console.log("Matrixify: received key share request.");
         if (parsed.senderUserId === this.getCurrentUserId()) {
           console.log("Matrixify: this is our own key share request. aborting");
           element.getElementsByClassName("p")[0].textContent = "🔑 Key exchange request sent";
-          this.colorMessage(element, 'blue');
+          this.colorMessage(element, 'green');
           return;
         } else if (await this.keyExchangeHandler.hasSession(parsed.senderUserId)) {
           element.getElementsByClassName("p")[0].textContent = "🔑 Key exchange request received";
-          this.colorMessage(element, 'yellow');
+          this.colorMessage(element, 'blue');
           return;
         }
         const success = await this.keyExchangeHandler.handleKeyShare(
@@ -383,7 +386,7 @@ export class BaleChatManager {
         );
 
         if (success) {
-          this.colorMessage(element, 'yellow');
+          this.colorMessage(element, 'blue');
           const span = element.querySelector('span.p');
           if (span) {
             span.textContent = '🔑 Key exchange request received';
@@ -406,17 +409,17 @@ export class BaleChatManager {
   }
 
   private colorMessage(element: HTMLElement, color: 'red' | 'blue' | 'green' | 'yellow'): void {
-    const messageBlock = element.querySelector(':scope > div') as HTMLElement || element.firstElementChild as HTMLElement;
+    const messageBlock = element.querySelector(':scope > div > div') as HTMLElement || element.firstElementChild as HTMLElement;
     if (!messageBlock) return;
 
     const colors = {
       red: 'rgba(220, 53, 69, 0.2)',
-      blue: 'rgba(0, 123, 255, 0.2)',
-      green: 'rgba(40, 167, 69, 0.2)',
+      blue: 'linear-gradient(45deg, var(--color-bubble-in-primary) 50%, var(--color-bubble-in-secondary) 125%)',
+      green: 'linear-gradient(-45deg, var(--color-bubble-out-primary) 50%, var(--color-bubble-out-secondary) 125%)',
       yellow: 'rgba(255, 193, 7, 0.2)'
     };
 
-    messageBlock.style.backgroundColor = colors[color];
+    messageBlock.style.background = colors[color];
   }
 
   private async handleSend(raw?: boolean): Promise<void> {
