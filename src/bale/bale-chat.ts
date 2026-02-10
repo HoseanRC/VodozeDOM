@@ -252,7 +252,7 @@ export class BaleChatManager {
     const input = document.getElementById('editable-message-text') as HTMLElement;
     if (input.dataset.matrixifyAttached) return;
     input.addEventListener("keypress", (event) => {
-      if (event.key === 'Enter') {
+      if (event.key === 'Enter' && !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)) {
         this.handleSend();
         input.innerText = "";
       }
@@ -423,15 +423,21 @@ export class BaleChatManager {
   }
 
   private async handleSend(raw?: boolean): Promise<void> {
-    if (raw) {
-      this.originalSendButton?.click();
-      return;
-    }
+    // act fast or the message will be sent
     const input = document.getElementById('editable-message-text') as HTMLElement;
     if (!input) return;
 
     const originalText = input.innerText;
+
     if (!originalText.trim()) return;
+    input.innerText = "";
+    // we can rest now
+
+    if (raw || !await this.keyExchangeHandler.hasSession(this.currentPeerUserId || "")) {
+      input.innerText = originalText;
+      this.originalSendButton?.click();
+      return;
+    }
 
     const mode = this.encryptionToggle?.getMode() || 'off';
 
