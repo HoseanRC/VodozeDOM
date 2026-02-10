@@ -36,28 +36,28 @@ class BackgroundService {
   ): Promise<void> {
     try {
       switch (message.type) {
-        case 'BALE_CREATE_OTK':
+        case 'CREATE_OTK':
           await this.handleBaleCreateOTK(message, sender);
           break;
-        case 'BALE_GET_IDENTITY_KEY':
+        case 'GET_IDENTITY_KEY':
           await this.handleBaleGetIdentityKey(message, sender);
           break;
-        case 'BALE_CREATE_SESSION_FROM_OTK':
+        case 'CREATE_SESSION_FROM_OTK':
           await this.handleBaleCreateSessionFromOTK(message, sender);
           break;
-        case 'BALE_CREATE_SESSION_FROM_PREKEY':
+        case 'CREATE_SESSION_FROM_PREKEY':
           await this.handleBaleCreateSessionFromPrekey(message, sender);
           break;
-        case 'BALE_ENCRYPT':
+        case 'ENCRYPT':
           await this.handleBaleEncrypt(message, sender);
           break;
-        case 'BALE_DECRYPT':
+        case 'DECRYPT':
           await this.handleBaleDecrypt(message, sender);
           break;
-        case 'BALE_CHECK_MESSAGE':
+        case 'CHECK_MESSAGE':
           await this.handleBaleCheckMessage(message, sender);
           break;
-        case 'BALE_CHECK_SESSION':
+        case 'CHECK_SESSION':
           await this.handleBaleCheckSession(message, sender);
           break;
         default:

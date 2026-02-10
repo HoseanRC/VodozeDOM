@@ -18,7 +18,7 @@ export class BaleChatManager {
 
   constructor() {
     const userId = this.getCurrentUserId() || '';
-    this.keyExchangeHandler = new KeyExchangeHandler(userId);
+    this.keyExchangeHandler = new KeyExchangeHandler(userId, "bale-");
   }
 
   async initialize(): Promise<void> {
@@ -339,7 +339,7 @@ export class BaleChatManager {
             this.colorMessage(element, 'red');
           }
         } else {
-          const plaintext = await this.keyExchangeHandler.handlePreKeyMessage(parsed, messageId, parsed.senderUserId);
+          const plaintext = await this.keyExchangeHandler.decryptPreKey(parsed, messageId, parsed.senderUserId);
           if (!plaintext) {
             this.colorMessage(element, 'red');
             element.getElementsByClassName("p")[0].textContent = "🔑 Failed to create session";
@@ -364,32 +364,29 @@ export class BaleChatManager {
           this.colorMessage(element, 'blue');
           return;
         }
-        const success = await this.keyExchangeHandler.handleKeyShare(
+        const preKeyMessage = await this.keyExchangeHandler.preKeyFromOneTimeKey(
           parsed,
           senderId,
-          async (text: string) => {
-            console.log("Matrixify: handling key share succeeded.");
-
-            this.encryptionToggle?.setNeedsKeyExchange(false);
-
-            this.colorMessage(element, 'blue');
-            const input = document.getElementById('editable-message-text') as HTMLElement;
-            if (input) {
-              setTimeout(async () => {
-                input.innerText = text;
-                await this.handleSend(true);
-                input.innerText = "";
-                this.lastSendMessage = "🔑 Encryption established";
-              }, 100);
-            }
-          }
         );
 
-        if (success) {
+        if (preKeyMessage) {
+          console.log("Matrixify: handling key share succeeded.");
           this.colorMessage(element, 'blue');
           const span = element.querySelector('span.p');
           if (span) {
             span.textContent = '🔑 Key exchange request received';
+          }
+          this.encryptionToggle?.setNeedsKeyExchange(false);
+
+          this.colorMessage(element, 'blue');
+          const input = document.getElementById('editable-message-text') as HTMLElement;
+          if (input) {
+            setTimeout(async () => {
+              input.innerText = JSON.stringify(preKeyMessage);
+              await this.handleSend(true);
+              input.innerText = "";
+              this.lastSendMessage = "🔑 Encryption established";
+            }, 100);
           }
         }
       }
@@ -449,7 +446,7 @@ export class BaleChatManager {
         );
 
         if (encrypted) {
-          input.innerText = encrypted;
+          input.innerText = JSON.stringify(encrypted);
           this.lastSendMessage = originalText;
           this.originalSendButton?.click();
           input.innerText = '';
@@ -484,7 +481,7 @@ export class BaleChatManager {
       }
     };
 
-    const success = await this.keyExchangeHandler.initiateKeyExchange(
+    const success = await this.keyExchangeHandler.createOneTimeKey(
       this.currentPeerUserId,
       sendMessage
     );

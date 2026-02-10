@@ -33,7 +33,16 @@ export interface EncryptedPayload {
 }
 
 export interface ExtensionMessage {
-  type: 'KEYS_RESULT' | 'BALE_CREATE_OTK' | 'BALE_CREATE_SESSION_FROM_OTK' | 'BALE_CREATE_SESSION_FROM_PREKEY' | 'BALE_ENCRYPT' | 'BALE_DECRYPT' | 'BALE_GET_IDENTITY_KEY' | 'BALE_STORE_MESSAGE' | 'BALE_CHECK_MESSAGE' | 'BALE_CHECK_SESSION';
+  type: 'KEYS_RESULT'
+  | 'CREATE_OTK'
+  | 'CREATE_SESSION_FROM_OTK'
+  | 'CREATE_SESSION_FROM_PREKEY'
+  | 'ENCRYPT'
+  | 'DECRYPT'
+  | 'GET_IDENTITY_KEY'
+  | 'STORE_MESSAGE'
+  | 'CHECK_MESSAGE'
+  | 'CHECK_SESSION';
   data?: any;
   requestId?: string;
 }

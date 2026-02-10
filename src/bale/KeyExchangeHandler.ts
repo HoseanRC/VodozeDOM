@@ -47,12 +47,12 @@ function generateRequestId(): string {
 addMessageListener();
 
 export class KeyExchangeHandler {
-  constructor(private currentUserId: string) { }
+  constructor(private currentUserId: string, private storagePrefix: string) { }
 
-  async initiateKeyExchange(_peerUserId: string, sendMessage: (text: string) => void): Promise<boolean> {
+  async createOneTimeKey(_peerUserId: string, sendMessage: (text: string) => void): Promise<boolean> {
     try {
       const response: any = await sendMessageAndWait({
-        type: 'BALE_CREATE_OTK',
+        type: 'CREATE_OTK',
         requestId: generateRequestId()
       });
 
@@ -77,12 +77,12 @@ export class KeyExchangeHandler {
     }
   }
 
-  async handleKeyShare(keyShare: KeyShareMessage, senderId: string, sendMessage: (text: string) => void): Promise<boolean> {
+  async preKeyFromOneTimeKey(keyShare: KeyShareMessage, senderId: string) {
     try {
       const response: ExtensionMessage = await sendMessageAndWait({
-        type: 'BALE_CREATE_SESSION_FROM_OTK',
+        type: 'CREATE_SESSION_FROM_OTK',
         data: {
-          peerUserId: senderId,
+          peerUserId: this.storagePrefix + senderId,
           identityKey: keyShare.identityKey,
           otk: keyShare.oneTimeKey
         },
@@ -91,7 +91,7 @@ export class KeyExchangeHandler {
 
       if (response?.data?.success && response.data.preKeyMessage) {
         const identityKey = await this.getIdentityKey();
-        if (!identityKey) return false;
+        if (!identityKey) return undefined;
         const preKeyMessage: EncryptedChatMessage = {
           type: 'olm',
           senderUserId: this.currentUserId,
@@ -99,44 +99,37 @@ export class KeyExchangeHandler {
           cipher: response.data.preKeyMessage
         };
 
-        sendMessage(JSON.stringify(preKeyMessage));
-        return true;
+        return preKeyMessage;
       }
-
-      return false;
-    } catch {
-      return false;
-    }
+    } catch { }
   }
 
-  async handlePreKeyMessage(encryptedMessage: EncryptedChatMessage, messageId: string, senderId: string): Promise<string | undefined> {
+  async decryptPreKey(encryptedMessage: EncryptedChatMessage, messageId: string, senderId: string) {
     try {
       const { message_type, ciphertext } = encryptedMessage.cipher;
 
-      const response: any = await sendMessageAndWait({
-        type: 'BALE_CREATE_SESSION_FROM_PREKEY',
+      const response = await sendMessageAndWait({
+        type: 'CREATE_SESSION_FROM_PREKEY',
         data: {
-          peerUserId: senderId,
+          peerUserId: this.storagePrefix + senderId,
           identityKey: encryptedMessage.identityKey,
-          messageId,
+          messageId: this.storagePrefix + messageId,
           messageType: message_type,
           ciphertext: ciphertext
         },
         requestId: generateRequestId()
       });
 
-      return response?.data?.plainText;
-    } catch {
-      return;
-    }
+      return response?.data?.plainText as string;
+    } catch { }
   }
 
-  async encryptMessage(peerUserId: string, plaintext: string): Promise<string | null> {
+  async encryptMessage(peerUserId: string, plaintext: string) {
     try {
-      const response: any = await sendMessageAndWait({
-        type: 'BALE_ENCRYPT',
+      const response = await sendMessageAndWait({
+        type: 'ENCRYPT',
         data: {
-          peerUserId,
+          peerUserId: this.storagePrefix + peerUserId,
           message: plaintext
         },
         requestId: generateRequestId()
@@ -152,13 +145,9 @@ export class KeyExchangeHandler {
             ciphertext
           }
         };
-        return JSON.stringify(encryptedMessage);
+        return encryptedMessage;
       }
-
-      return null;
-    } catch {
-      return null;
-    }
+    } catch { }
   }
 
   async decryptMessage(
@@ -167,13 +156,13 @@ export class KeyExchangeHandler {
     messageType: number,
     ciphertext: string,
     lastSendMessage: string | null,
-  ): Promise<string | null> {
+  ) {
     try {
-      const response: any = await sendMessageAndWait({
-        type: 'BALE_DECRYPT',
+      const response = await sendMessageAndWait({
+        type: 'DECRYPT',
         data: {
-          peerUserId,
-          messageId,
+          peerUserId: this.storagePrefix + peerUserId,
+          messageId: this.storagePrefix + messageId,
           messageType,
           ciphertext,
           lastSendMessage
@@ -182,27 +171,24 @@ export class KeyExchangeHandler {
       });
 
       if (response?.data?.success && response.data.decryptedMessage) {
-        return response.data.decryptedMessage;
+        return response.data.decryptedMessage as string;
       }
-
-      return null;
-    } catch {
-      return null;
-    }
+    } catch { }
   }
 
-  async checkMessageExists(messageId: string): Promise<boolean> {
+  async isMessageCached(messageId: string) {
     try {
-      const response: any = await sendMessageAndWait({
-        type: 'BALE_CHECK_MESSAGE',
-        data: { messageId },
+      const response = await sendMessageAndWait({
+        type: 'CHECK_MESSAGE',
+        data: {
+          messageId: this.storagePrefix + messageId
+        },
         requestId: generateRequestId()
       });
 
-      return response?.data?.exists === true;
-    } catch {
-      return false;
-    }
+      return !!response?.data?.exists;
+    } catch { }
+    return false;
   }
 
   private cachedSessions: {
@@ -217,7 +203,8 @@ export class KeyExchangeHandler {
       resolves: ((hasSession: boolean) => void)[]
     }
   } = {};
-  async hasSession(peerUserId: string): Promise<boolean> {
+
+  async hasSession(peerUserId: string) {
     if (peerUserId == this.currentUserId) return true;
     if ((this.cachedSessions[peerUserId]?.lastUpdate + 3000) > Date.now()) {
       if (this.cachedSessions[peerUserId].processing) {
@@ -237,13 +224,15 @@ export class KeyExchangeHandler {
 
       if (!this.cacheQueue[peerUserId]) this.cacheQueue[peerUserId] = { resolves: [] };
 
-      const response: any = await sendMessageAndWait({
-        type: 'BALE_CHECK_SESSION',
-        data: { peerUserId },
+      const response = await sendMessageAndWait({
+        type: 'CHECK_SESSION',
+        data: {
+          peerUserId: this.storagePrefix + peerUserId
+        },
         requestId: generateRequestId()
       });
 
-      const exists = response?.data?.exists === true;
+      const exists = !!response?.data?.exists;
 
       this.cachedSessions[peerUserId] = {
         hasSession: exists,
@@ -255,21 +244,18 @@ export class KeyExchangeHandler {
       this.cacheQueue[peerUserId].resolves = [];
 
       return exists;
-    } catch {
-      return false;
-    }
+    } catch { }
+    return false;
   }
 
-  async getIdentityKey(): Promise<string | null> {
+  async getIdentityKey() {
     try {
-      const response: any = await sendMessageAndWait({
-        type: 'BALE_GET_IDENTITY_KEY',
+      const response = await sendMessageAndWait({
+        type: 'GET_IDENTITY_KEY',
         requestId: generateRequestId()
       });
 
-      return response?.data?.identityKey || null;
-    } catch {
-      return null;
-    }
+      return response?.data?.identityKey as string;
+    } catch { }
   }
 }
