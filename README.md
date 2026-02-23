@@ -45,6 +45,7 @@ the encrypted messages will be seen as a JSON with an unreadable cipher text if 
 - it currently only supports encryption of text messages (file and voice messages are harder to minipulate in DOM).
 - there is no cross-device encryption (only one device per platform).
 - there is no cross-account encryption (only one account per website).
+- encryption only works in private messages. group messages have not been implemented.
 
 if you think any of these limitations can be fixed, please submit a pull request.
 
