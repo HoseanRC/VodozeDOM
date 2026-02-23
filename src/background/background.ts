@@ -54,6 +54,13 @@ class BackgroundService {
 
     try {
       switch (typedMessage.type) {
+        case 'PING':
+          this.sendResponse(sender.tab?.id, {
+            type: "PING",
+            data: undefined,
+            requestId: message.requestId,
+          });
+          break;
         case 'CREATE_OTK':
           await this.handleCreateOTK(typedMessage, sender);
           break;

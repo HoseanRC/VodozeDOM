@@ -65,7 +65,21 @@ function generateRequestId(): string {
 addMessageListener();
 
 export class KeyExchangeHandler {
-  constructor(private currentUserId: string, private storagePrefix: string) { }
+  constructor(private currentUserId: string, private storagePrefix: string) {
+    this.keepAlive();
+  }
+
+  private async keepAlive() {
+    sendMessageAndWait({
+      type: "PING",
+      data: undefined,
+      requestId: generateRequestId()
+    }).catch((reason) => {
+      console.error("Ping failed:", reason)
+      alert(reason);
+    });
+    setTimeout(() => this.keepAlive(), 20000);
+  }
 
   async createOneTimeKey(_peerUserId: string, sendMessage: (text: string) => void): Promise<boolean> {
     try {

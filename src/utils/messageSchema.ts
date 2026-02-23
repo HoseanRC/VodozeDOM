@@ -133,6 +133,7 @@ export const CheckSessionResponseDataSchema = z.object({
 export type CheckSessionResponseData = z.infer<typeof CheckSessionResponseDataSchema>;
 
 export type ExtensionMessage =
+  | { type: 'PING'; data: undefined; requestId?: string }
   | { type: 'CREATE_OTK'; data: CreateOtkData; requestId?: string }
   | { type: 'CREATE_OTK_RESPONSE'; data: CreateOtkResponseData; requestId?: string }
   | { type: 'CREATE_SESSION_FROM_OTK'; data: CreateSessionFromOtkData; requestId?: string }
@@ -149,6 +150,12 @@ export type ExtensionMessage =
   | { type: 'CHECK_MESSAGE_RESPONSE'; data: CheckMessageResponseData; requestId?: string }
   | { type: 'CHECK_SESSION'; data: CheckSessionData; requestId?: string }
   | { type: 'CHECK_SESSION_RESPONSE'; data: CheckSessionResponseData; requestId?: string };
+
+const createPingSchema = z.object({
+  type: z.literal('PING'),
+  data: z.undefined(),
+  requestId: z.string().optional()
+});
 
 const createOtkSchema = z.object({
   type: z.literal('CREATE_OTK'),
@@ -247,6 +254,7 @@ const checkSessionResponseSchema = z.object({
 });
 
 export const incomingMessageSchema = z.union([
+  createPingSchema,
   createOtkSchema,
   createOtkResponseSchema,
   createSessionFromOtkSchema,
