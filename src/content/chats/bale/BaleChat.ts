@@ -1,6 +1,6 @@
-import { KeyExchangeHandler } from './KeyExchangeHandler';
-import { EncryptionToggle, EncryptionMode } from '../components/EncryptionToggle';
-import { EncryptedChatMessage, KeyShareMessage } from './types';
+import { KeyExchangeHandler } from '../../KeyExchangeHandler';
+import { EncryptionToggle, EncryptionMode } from './BaleEncryptionToggle';
+import { EncryptedChatMessage, KeyShareMessage } from '../../types';
 
 export class BaleChatManager {
   private keyExchangeHandler: KeyExchangeHandler;

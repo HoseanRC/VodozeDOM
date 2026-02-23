@@ -1,10 +1,3 @@
-export type EncryptionState = 'on' | 'off' | 'init';
-
-export interface ChatEncryptionState {
-  chatId: string;
-  state: EncryptionState;
-}
-
 export interface KeyShareMessage {
   type: 'key_share';
   senderUserId: string;

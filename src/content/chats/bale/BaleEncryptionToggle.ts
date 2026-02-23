@@ -64,13 +64,13 @@ export class EncryptionToggle {
           svgElement.outerHTML = this.currentMode === 'on' ? shieldEnabledSvg : shieldDisabledSvg;
         } else if (this.iconMode !== this.currentMode) {
           if (this.currentMode === 'on') {
-            svgElement.getElementById("checkmark").setAttribute("fill", "transparent");
-            svgElement.getElementById("frame").setAttribute("fill", "transparent");
-            svgElement.getElementById("back").setAttribute("fill", "#00b894");
+            svgElement.getElementById("checkmark")?.setAttribute("fill", "transparent");
+            svgElement.getElementById("frame")?.setAttribute("fill", "transparent");
+            svgElement.getElementById("back")?.setAttribute("fill", "#00b894");
           } else {
-            svgElement.getElementById("checkmark").setAttribute("fill", "#5e6c84");
-            svgElement.getElementById("frame").setAttribute("fill", "#5e6c84");
-            svgElement.getElementById("back").setAttribute("fill", "transparent");
+            svgElement.getElementById("checkmark")?.setAttribute("fill", "#5e6c84");
+            svgElement.getElementById("frame")?.setAttribute("fill", "#5e6c84");
+            svgElement.getElementById("back")?.setAttribute("fill", "transparent");
           }
         }
         this.iconMode = this.currentMode;

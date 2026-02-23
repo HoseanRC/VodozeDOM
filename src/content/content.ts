@@ -1,4 +1,4 @@
-import { BaleChatManager } from '../bale/bale-chat';
+import { BaleChatManager } from './chats/bale/BaleChat';
 
 class ContentScript {
   private baleChatManager: BaleChatManager | null = null;
