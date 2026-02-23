@@ -430,43 +430,41 @@ export class BaleChatManager {
     input.innerText = "";
     // we can rest now
 
-    if (raw || !await this.keyExchangeHandler.hasSession(this.currentPeerUserId || "")) {
+    const mode = this.encryptionToggle?.getMode() || 'off';
+
+    if (raw || !await this.keyExchangeHandler.hasSession(this.currentPeerUserId || "") || mode === 'off') {
       input.innerText = originalText;
       this.originalSendButton?.click();
+      input.innerText = "";
       return;
     }
 
-    const mode = this.encryptionToggle?.getMode() || 'off';
+    try {
+      const encrypted = await this.keyExchangeHandler.encryptMessage(
+        this.currentPeerUserId || '',
+        originalText
+      );
 
-    if (mode === 'on') {
-      try {
-        const encrypted = await this.keyExchangeHandler.encryptMessage(
-          this.currentPeerUserId || '',
-          originalText
-        );
-
-        if (encrypted) {
-          input.innerText = JSON.stringify(encrypted);
-          this.lastSendMessage = originalText;
-          this.originalSendButton?.click();
-          input.innerText = '';
-        } else {
-          input.innerText = '';
-          setTimeout(() => {
-            input.innerText = originalText;
-            alert('Encryption failed');
-          }, 100);
-        }
-      } catch {
+      if (encrypted) {
+        input.innerText = JSON.stringify(encrypted);
+        this.lastSendMessage = originalText;
+        this.originalSendButton?.click();
+        input.innerText = '';
+      } else {
         input.innerText = '';
         setTimeout(() => {
           input.innerText = originalText;
           alert('Encryption failed');
         }, 100);
       }
-    } else {
-      this.originalSendButton?.click();
+    } catch {
+      input.innerText = '';
+      setTimeout(() => {
+        input.innerText = originalText;
+        alert('Encryption failed');
+      }, 100);
     }
+
   }
 
   private async initiateKeyExchange(): Promise<void> {
