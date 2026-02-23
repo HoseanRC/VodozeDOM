@@ -8,6 +8,11 @@
 > [!NOTE]
 > this project is **WIP**. expect bugs and problems on usage.
 
+
+> [!WARNING]
+> Please check the limitations section below before using this extension.
+
+
 ## What exactly is this?
 
 [**vodozemac**](https://github.com/matrix-org/vodozemac) is a library used by [**Matrix**](https://matrix.org/) (the most secure real time chat platform) to handle the encryption and decryption on each side of the converstation. this library creates an End to End Ecnryption (E2EE) between the 2 accounts and multiple devices for each account. in basic terms, only the 2 sides of the converstation can understand the messages sent.
@@ -26,13 +31,22 @@ once an **OTK** (One Time Key) or a **prekey** is received, the session is estab
 
 the encrypted messages will be seen as a JSON with an unreadable cipher text if the chat is opened from a different place (a different browser or a native app).
 
-## features
+## Features
 
 - Establish E2EE session
 - Encrypt and decrypt text messages
 - Store keys in IndexedDB 
 - Cross-browser support (Firefox & Chrome)
 - Typescript type safety
+
+## Limitations
+
+- it currently only supports [Bale](https://web.bale.ai), but other websites can be added accordingly.
+- it currently only supports encryption of text messages (file and voice messages are harder to minipulate in DOM).
+- there is no cross-device encryption (only one device per platform).
+- there is no cross-account encryption (only one account per website).
+
+if you think any of these limitations can be fixed, please submit a pull request.
 
 ## Installation
 
