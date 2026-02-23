@@ -25,24 +25,3 @@ export interface KeyShare {
   oneTimeKey: string;
   timestamp: number;
 }
-
-export interface EncryptedPayload {
-  type: 'olm';
-  senderUserId: string;
-  ciphertext: any; // vodozemac message
-}
-
-export interface ExtensionMessage {
-  type: 'KEYS_RESULT'
-  | 'CREATE_OTK'
-  | 'CREATE_SESSION_FROM_OTK'
-  | 'CREATE_SESSION_FROM_PREKEY'
-  | 'ENCRYPT'
-  | 'DECRYPT'
-  | 'GET_IDENTITY_KEY'
-  | 'STORE_MESSAGE'
-  | 'CHECK_MESSAGE'
-  | 'CHECK_SESSION';
-  data?: any;
-  requestId?: string;
-}

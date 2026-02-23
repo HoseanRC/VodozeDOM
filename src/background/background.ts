@@ -1,4 +1,15 @@
-import { ExtensionMessage } from '../types';
+import {
+  ExtensionMessage,
+  validateIncomingMessage,
+  CreateOtkData,
+  CreateSessionFromOtkData,
+  CreateSessionFromPrekeyData,
+  EncryptData,
+  DecryptData,
+  GetIdentityKeyData,
+  CheckMessageData,
+  CheckSessionData
+} from '../utils/messageSchema';
 import { EncryptionService } from '../utils/encryption';
 import vodozemacWasm from "../vodozemac/vodozemac_bg.wasm?url";
 import vodozemac from "../vodozemac";
@@ -32,50 +43,57 @@ class BackgroundService {
   private async handleMessage(
     message: ExtensionMessage,
     sender: chrome.runtime.MessageSender,
-    _sendResponse: (response?: any) => void
   ): Promise<void> {
+    const validation = validateIncomingMessage(message);
+    if (!validation.success) {
+      console.warn('Invalid message received:', validation.error);
+      return;
+    }
+
+    const typedMessage = validation.data;
+
     try {
-      switch (message.type) {
+      switch (typedMessage.type) {
         case 'CREATE_OTK':
-          await this.handleBaleCreateOTK(message, sender);
+          await this.handleCreateOTK(typedMessage, sender);
           break;
         case 'GET_IDENTITY_KEY':
-          await this.handleBaleGetIdentityKey(message, sender);
+          await this.handleGetIdentityKey(typedMessage, sender);
           break;
         case 'CREATE_SESSION_FROM_OTK':
-          await this.handleBaleCreateSessionFromOTK(message, sender);
+          await this.handleCreateSessionFromOTK(typedMessage, sender);
           break;
         case 'CREATE_SESSION_FROM_PREKEY':
-          await this.handleBaleCreateSessionFromPrekey(message, sender);
+          await this.handleCreateSessionFromPrekey(typedMessage, sender);
           break;
         case 'ENCRYPT':
-          await this.handleBaleEncrypt(message, sender);
+          await this.handleEncrypt(typedMessage, sender);
           break;
         case 'DECRYPT':
-          await this.handleBaleDecrypt(message, sender);
+          await this.handleDecrypt(typedMessage, sender);
           break;
         case 'CHECK_MESSAGE':
-          await this.handleBaleCheckMessage(message, sender);
+          await this.handleCheckMessage(typedMessage, sender);
           break;
         case 'CHECK_SESSION':
-          await this.handleBaleCheckSession(message, sender);
+          await this.handleCheckSession(typedMessage, sender);
           break;
         default:
-          console.warn('Unknown message type:', message.type);
+          console.warn('Unknown message type:', typedMessage.type);
       }
     } catch (error) {
       console.error('Error handling message:', error);
-      this.sendErrorResponse(sender, message.requestId, error as Error);
+      this.sendErrorResponse(sender, typedMessage.requestId, error as Error);
     }
   }
 
-  private async handleBaleCreateOTK(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+  private async handleCreateOTK(message: { data: CreateOtkData; requestId?: string }, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
       const otk = await encryptionService.createOTK();
       const identityKey = encryptionService.identityKey;
 
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CREATE_OTK_RESPONSE',
         data: {
           success: true,
           otk,
@@ -87,7 +105,7 @@ class BackgroundService {
       this.sendResponse(sender.tab?.id, response);
     } catch (error) {
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CREATE_OTK_RESPONSE',
         data: {
           success: false,
           error: (error as Error).message
@@ -99,12 +117,12 @@ class BackgroundService {
     }
   }
 
-  private async handleBaleGetIdentityKey(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+  private async handleGetIdentityKey(message: { data: GetIdentityKeyData; requestId?: string }, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
       const identityKey = encryptionService.identityKey;
 
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'GET_IDENTITY_KEY_RESPONSE',
         data: {
           success: !!identityKey,
           identityKey
@@ -115,7 +133,7 @@ class BackgroundService {
       this.sendResponse(sender.tab?.id, response);
     } catch (error) {
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'GET_IDENTITY_KEY_RESPONSE',
         data: {
           success: false,
           error: (error as Error).message
@@ -127,7 +145,7 @@ class BackgroundService {
     }
   }
 
-  private async handleBaleCreateSessionFromOTK(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+  private async handleCreateSessionFromOTK(message: { data: CreateSessionFromOtkData; requestId?: string }, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
       const { peerUserId, identityKey, otk } = message.data;
 
@@ -138,7 +156,7 @@ class BackgroundService {
       );
 
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CREATE_SESSION_FROM_OTK_RESPONSE',
         data: {
           success: true,
           preKeyMessage
@@ -149,7 +167,7 @@ class BackgroundService {
       this.sendResponse(sender.tab?.id, response);
     } catch (error) {
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CREATE_SESSION_FROM_OTK_RESPONSE',
         data: {
           success: false,
           error: (error as Error).message
@@ -161,7 +179,7 @@ class BackgroundService {
     }
   }
 
-  private async handleBaleCreateSessionFromPrekey(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+  private async handleCreateSessionFromPrekey(message: { data: CreateSessionFromPrekeyData; requestId?: string }, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
       const { peerUserId, identityKey, messageId, messageType, ciphertext } = message.data;
 
@@ -174,8 +192,9 @@ class BackgroundService {
       );
 
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CREATE_SESSION_FROM_PREKEY_RESPONSE',
         data: {
+          success: true,
           plainText: result
         },
         requestId: message.requestId
@@ -184,7 +203,7 @@ class BackgroundService {
       this.sendResponse(sender.tab?.id, response);
     } catch (error) {
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CREATE_SESSION_FROM_PREKEY_RESPONSE',
         data: {
           success: false,
           error: (error as Error).message
@@ -196,7 +215,7 @@ class BackgroundService {
     }
   }
 
-  private async handleBaleEncrypt(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+  private async handleEncrypt(message: { data: EncryptData; requestId?: string }, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
       const { peerUserId, message: plainMessage } = message.data;
 
@@ -206,7 +225,7 @@ class BackgroundService {
       );
 
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'ENCRYPT_RESPONSE',
         data: {
           success: true,
           encryptedMessage: {
@@ -220,7 +239,7 @@ class BackgroundService {
       this.sendResponse(sender.tab?.id, response);
     } catch (error) {
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'ENCRYPT_RESPONSE',
         data: {
           success: false,
           error: (error as Error).message
@@ -232,7 +251,7 @@ class BackgroundService {
     }
   }
 
-  private async handleBaleDecrypt(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+  private async handleDecrypt(message: { data: DecryptData; requestId?: string }, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
       const { peerUserId, messageId, messageType, ciphertext, lastSendMessage } = message.data;
 
@@ -256,7 +275,7 @@ class BackgroundService {
       }
 
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'DECRYPT_RESPONSE',
         data: {
           success: true,
           decryptedMessage
@@ -267,7 +286,7 @@ class BackgroundService {
       this.sendResponse(sender.tab?.id, response);
     } catch (error) {
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'DECRYPT_RESPONSE',
         data: {
           success: false,
           error: (error as Error).message
@@ -279,14 +298,14 @@ class BackgroundService {
     }
   }
 
-  private async handleBaleCheckMessage(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+  private async handleCheckMessage(message: { data: CheckMessageData; requestId?: string }, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
       const { messageId } = message.data;
 
       const exists = await encryptionService.checkMessage(messageId);
 
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CHECK_MESSAGE_RESPONSE',
         data: {
           success: true,
           exists
@@ -297,7 +316,7 @@ class BackgroundService {
       this.sendResponse(sender.tab?.id, response);
     } catch (error) {
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CHECK_MESSAGE_RESPONSE',
         data: {
           success: false,
           error: (error as Error).message
@@ -309,7 +328,7 @@ class BackgroundService {
     }
   }
 
-  private async handleBaleCheckSession(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+  private async handleCheckSession(message: { data: CheckSessionData; requestId?: string }, sender: chrome.runtime.MessageSender): Promise<void> {
     try {
       const { peerUserId } = message.data;
 
@@ -318,7 +337,7 @@ class BackgroundService {
       console.debug(`check session: ${peerUserId}, ${exists}`);
 
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CHECK_SESSION_RESPONSE',
         data: {
           success: true,
           exists
@@ -329,7 +348,7 @@ class BackgroundService {
       this.sendResponse(sender.tab?.id, response);
     } catch (error) {
       const response: ExtensionMessage = {
-        type: 'KEYS_RESULT',
+        type: 'CHECK_SESSION_RESPONSE',
         data: {
           success: false,
           error: (error as Error).message
@@ -349,7 +368,7 @@ class BackgroundService {
 
   private sendErrorResponse(sender: chrome.runtime.MessageSender, requestId: string | undefined, error: Error): void {
     const response: ExtensionMessage = {
-      type: 'KEYS_RESULT',
+      type: 'DECRYPT_RESPONSE',
       data: {
         success: false,
         error: error.message

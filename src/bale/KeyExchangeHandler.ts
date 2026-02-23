@@ -1,20 +1,38 @@
-import { ExtensionMessage } from '../types';
+import {
+  ExtensionMessage,
+  CreateOtkResponseData,
+  CreateSessionFromOtkResponseData,
+  CreateSessionFromPrekeyResponseData,
+  EncryptResponseData,
+  DecryptResponseData,
+  GetIdentityKeyResponseData,
+  CheckMessageResponseData,
+  CheckSessionResponseData,
+  validateIncomingMessage
+} from '../utils/messageSchema';
 import { KeyShareMessage, EncryptedChatMessage } from './types';
 
-const pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (reason?: any) => void }>();
+const pendingRequests = new Map<string, { resolve: (value: ExtensionMessage) => void; reject: (reason: Error) => void }>();
 let messageListenerAdded = false;
 
 function addMessageListener(): void {
   if (messageListenerAdded) return;
   messageListenerAdded = true;
 
-  chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, _sendResponse) => {
-    const requestId = message.requestId;
+  chrome.runtime.onMessage.addListener((message: unknown, _sender, _sendResponse) => {
+    const validation = validateIncomingMessage(message);
+    if (!validation.success) {
+      console.warn('Invalid response message received:', validation.error);
+      return false;
+    }
+
+    const typedMessage = validation.data;
+    const requestId = typedMessage.requestId;
     if (!requestId) return true;
 
     const pending = pendingRequests.get(requestId);
     if (pending) {
-      pending.resolve(message);
+      pending.resolve(typedMessage);
       pendingRequests.delete(requestId);
     }
 
@@ -22,8 +40,8 @@ function addMessageListener(): void {
   });
 }
 
-function sendMessageAndWait(message: ExtensionMessage): Promise<any> {
-  return new Promise((resolve, reject) => {
+function sendMessageAndWait(message: ExtensionMessage): Promise<ExtensionMessage> {
+  return new Promise((resolve: (value: ExtensionMessage) => void, reject: (reason: Error) => void) => {
     const requestId = message.requestId || Date.now().toString(36) + Math.random().toString(36).substring(2);
     message.requestId = requestId;
 
@@ -51,19 +69,19 @@ export class KeyExchangeHandler {
 
   async createOneTimeKey(_peerUserId: string, sendMessage: (text: string) => void): Promise<boolean> {
     try {
-      const response: any = await sendMessageAndWait({
+      const response = await sendMessageAndWait({
         type: 'CREATE_OTK',
+        data: {},
         requestId: generateRequestId()
       });
 
-      if (response?.data?.success) {
-        const { otk, identityKey } = response.data;
-
+      const responseData = response.data as CreateOtkResponseData;
+      if (responseData?.success && responseData.otk && responseData.identityKey) {
         const keyShare: KeyShareMessage = {
           type: 'key_share',
           senderUserId: this.currentUserId,
-          identityKey,
-          oneTimeKey: otk,
+          identityKey: responseData.identityKey,
+          oneTimeKey: responseData.otk,
           timestamp: Date.now()
         };
 
@@ -79,7 +97,7 @@ export class KeyExchangeHandler {
 
   async preKeyFromOneTimeKey(keyShare: KeyShareMessage, senderId: string) {
     try {
-      const response: ExtensionMessage = await sendMessageAndWait({
+      const response = await sendMessageAndWait({
         type: 'CREATE_SESSION_FROM_OTK',
         data: {
           peerUserId: this.storagePrefix + senderId,
@@ -89,14 +107,15 @@ export class KeyExchangeHandler {
         requestId: generateRequestId()
       });
 
-      if (response?.data?.success && response.data.preKeyMessage) {
+      const responseData = response.data as CreateSessionFromOtkResponseData;
+      if (responseData?.success && responseData.preKeyMessage) {
         const identityKey = await this.getIdentityKey();
         if (!identityKey) return undefined;
         const preKeyMessage: EncryptedChatMessage = {
           type: 'olm',
           senderUserId: this.currentUserId,
           identityKey,
-          cipher: response.data.preKeyMessage
+          cipher: responseData.preKeyMessage
         };
 
         return preKeyMessage;
@@ -112,7 +131,7 @@ export class KeyExchangeHandler {
         type: 'CREATE_SESSION_FROM_PREKEY',
         data: {
           peerUserId: this.storagePrefix + senderId,
-          identityKey: encryptedMessage.identityKey,
+          identityKey: encryptedMessage.identityKey || '',
           messageId: this.storagePrefix + messageId,
           messageType: message_type,
           ciphertext: ciphertext
@@ -120,7 +139,8 @@ export class KeyExchangeHandler {
         requestId: generateRequestId()
       });
 
-      return response?.data?.plainText as string;
+      const responseData = response.data as CreateSessionFromPrekeyResponseData;
+      return responseData?.plainText;
     } catch { }
   }
 
@@ -135,8 +155,9 @@ export class KeyExchangeHandler {
         requestId: generateRequestId()
       });
 
-      if (response?.data?.success && response.data.encryptedMessage) {
-        const { message_type, ciphertext } = response.data.encryptedMessage;
+      const responseData = response.data as EncryptResponseData;
+      if (responseData?.success && responseData.encryptedMessage?.ciphertext && responseData.encryptedMessage.message_type) {
+        const { message_type, ciphertext } = responseData.encryptedMessage;
         const encryptedMessage: EncryptedChatMessage = {
           type: 'olm',
           senderUserId: this.currentUserId,
@@ -170,8 +191,9 @@ export class KeyExchangeHandler {
         requestId: generateRequestId()
       });
 
-      if (response?.data?.success && response.data.decryptedMessage) {
-        return response.data.decryptedMessage as string;
+      const responseData = response.data as DecryptResponseData;
+      if (responseData?.success && responseData.decryptedMessage) {
+        return responseData.decryptedMessage;
       }
     } catch { }
   }
@@ -186,7 +208,8 @@ export class KeyExchangeHandler {
         requestId: generateRequestId()
       });
 
-      return !!response?.data?.exists;
+      const responseData = response.data as CheckMessageResponseData;
+      return !!responseData?.exists;
     } catch { }
     return false;
   }
@@ -232,7 +255,8 @@ export class KeyExchangeHandler {
         requestId: generateRequestId()
       });
 
-      const exists = !!response?.data?.exists;
+      const responseData = response.data as CheckSessionResponseData;
+      const exists = !!responseData?.exists;
 
       this.cachedSessions[peerUserId] = {
         hasSession: exists,
@@ -252,10 +276,12 @@ export class KeyExchangeHandler {
     try {
       const response = await sendMessageAndWait({
         type: 'GET_IDENTITY_KEY',
+        data: {},
         requestId: generateRequestId()
       });
 
-      return response?.data?.identityKey as string;
+      const responseData = response.data as GetIdentityKeyResponseData;
+      return responseData?.identityKey;
     } catch { }
   }
 }
