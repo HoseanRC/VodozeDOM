@@ -11,12 +11,13 @@
     "https://web.bale.ai/*"
   ],
   "background": {
-    "scripts": ["src/background/background.ts"]
+    "scripts": ["src/background/background.ts", "src/utils/messageSchema.ts"],
+    "type": "module"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["src/content/content.ts"],
+      "js": ["src/content/content.ts", "src/utils/messageSchema.ts"],
       "css": ["content.css"]
     }
   ],

@@ -1,6 +1,6 @@
 import { build } from 'vite'
 import { defineConfig } from 'vite'
-import { copyFileSync, mkdirSync, existsSync } from 'fs'
+import { copyFileSync } from 'fs'
 
 const viteConfig = defineConfig({
   build: {
@@ -8,7 +8,6 @@ const viteConfig = defineConfig({
       input: {
         background: 'src/background/background.ts',
         content: 'src/content/content.ts',
-        popup: 'src/popup/popup.ts'
       },
       external: ['chrome'],
       output: {
@@ -34,7 +33,6 @@ async function buildExtension() {
     let popupHtml = await import('fs/promises').then(fs => 
       fs.readFile('src/popup/popup.html', 'utf8')
     )
-    popupHtml = popupHtml.replace('src/popup/popup.ts', 'popup.js')
     await import('fs/promises').then(fs => 
       fs.writeFile('dist/popup.html', popupHtml)
     )
