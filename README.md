@@ -1,16 +1,38 @@
-# VodozeDOM
+<p align="center">
+    <img src="./public/icon.svg" width="128"/>
+    <h1 align="center">VodozeDOM</h1>
+</p>
 
-A cross-browser extension for end-to-end encryption of web chat messages using the vodozemac library.
+**A cross-browser browser extension to establish E2EE without the need for an external server**
 
-## Features
+> [!NOTE]
+> this project is **WIP**. expect bugs and problems on usage.
 
-- 🔐 Generate and manage encryption key pairs
-- 🔒 Encrypt messages with recipient's public key
-- 🔓 Decrypt messages with sender's public key
-- 💾 Secure key storage using IndexedDB
-- 🌐 Cross-browser support (Firefox & Chrome)
-- 🎯 TypeScript for type safety
-- 📱 Floating UI panel for easy access
+## What exactly is this?
+
+[**vodozemac**](https://github.com/matrix-org/vodozemac) is a library used by [**Matrix**](https://matrix.org/) (the most secure real time chat platform) to handle the encryption and decryption on each side of the converstation. this library creates an End to End Ecnryption (E2EE) between the 2 accounts and multiple devices for each account. in basic terms, only the 2 sides of the converstation can understand the messages sent.
+
+**VodozeDOM** uses vodozemac to implement E2EE to any real time chat website, even if it doesn't support encryption.
+
+## How it works?
+
+when a supported chatting website is opened, **VodozeDOM** will hijack the website and add an encryption button for each private chat.
+
+if the private chat has no established encryption, the button will start an encryption session. it will send an **OTK** (One Time Key) to the peer.
+
+when an **OTK** (One Time Key) is received, **VodozeDOM** will automatically send a response containing a **prekey**.
+
+once an **OTK** (One Time Key) or a **prekey** is received, the session is established and messages can be encrypted and decrypted accordingly.
+
+the encrypted messages will be seen as a JSON with an unreadable cipher text if the chat is opened from a different place (a different browser or a native app).
+
+## features
+
+- Establish E2EE session
+- Encrypt and decrypt text messages
+- Store keys in IndexedDB 
+- Cross-browser support (Firefox & Chrome)
+- Typescript type safety
 
 ## Installation
 
@@ -18,7 +40,7 @@ A cross-browser extension for end-to-end encryption of web chat messages using t
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/HoseanRC/VodozeDOM
 cd vodozedom
 ```
 
@@ -48,62 +70,17 @@ pnpm build
 
 ## Usage
 
-### Basic Operations
+just load a supported website, login and start using it.
 
-1. **Generate Keys**: Click the floating button in the bottom-right corner of any page, then click "Generate New Keys"
-2. **Encrypt Message**: Enter a message and the recipient's public key, then click "Encrypt Message"
-3. **Decrypt Message**: Enter an encrypted message and the sender's public key, then click "Decrypt Message"
-4. **Copy Public Key**: Click "Copy Public Key" to share your public key with others
+## Supported Websites
 
-### For Later Implementation
+| Website | URL | Descriotion |
+|---------|-----|-------------|
+| Bale | https://web.bale.ai | an iranian chatting website |
 
-The following functions are exposed for future P2P integration:
-- `createGroupSession()` - For group chat encryption
-- `encryptForGroup()` - For encrypting messages to a group
-- `decryptFromGroup()` - For decrypting group messages
+> [!NOTE]
+> adding more websites requires deddication and each website should have it's injecting code developed. feel free to submit a pull request if you develop it for a website you use!
 
-## Architecture
+## Contributing
 
-- **Background Script**: Handles encryption operations and key management
-- **Content Script**: Injects the floating UI and handles user interactions
-- **Popup**: Extension popup for quick access to main functions
-- **Storage Service**: IndexedDB wrapper for secure key storage
-- **Encryption Service**: Interface to vodozemac-wasm-bindings
-
-## Security
-
-- Private keys are stored securely in IndexedDB
-- All encryption happens locally in the browser
-- No data is sent to external servers
-- Uses the vodozemac library for cryptographic operations
-
-## Development
-
-### Scripts
-
-- `pnpm dev` - Build in watch mode
-- `pnpm build` - Production build
-- `pnpm typecheck` - Type checking
-- `pnpm lint` - ESLint checking
-- `pnpm clean` - Clean build directory
-
-### Project Structure
-
-```
-src/
-├── background/     # Background script
-├── content/        # Content script
-├── components/     # UI components
-├── types/          # TypeScript types
-├── utils/          # Utility functions
-└── popup/          # Popup script
-    └── popup.html  # Popup HTML
-
-public/
-├── manifest.json   # Extension manifest
-└── content.css     # Content script styles
-```
-
-## License
-
-ISC
+Contributions are welcome! Feel free to open issues or submit pull requests.

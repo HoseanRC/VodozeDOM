@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="95.990829mm"
+   height="108.84958mm"
+   viewBox="0 0 95.990829 108.84958"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <g
+     id="layer1"
+     transform="translate(-82.020829,-38.364587)">
+    <path
+       fill="#e44d26"
+       d="m 90.752082,136.36625 -8.73125,-98.001667 h 95.990828 l -8.73125,97.948747 -39.34354,10.90083"
+       id="path2"
+       style="fill:#282828;fill-opacity:1;stroke-width:0.264583" />
+    <path
+       fill="#f16529"
+       d="M 130.01625,138.87979 V 46.407916 h 39.23771 l -7.48771,83.608334"
+       id="path3"
+       style="fill:#414141;fill-opacity:1;stroke-width:0.264583" />
+    <path
+       fill="#ffffff"
+       d="m 160.07291,58.393541 h -12.065 l -4.6302,51.937709 -13.36146,3.59833 -0.0529,12.48834 24.60625,-6.82625"
+       id="path5"
+       style="stroke-width:0.264583" />
+    <path
+       fill="#ffffff"
+       d="m 99.959582,58.393541 h 12.064998 l 4.63021,51.937709 13.36146,3.59833 v 12.47366 l -24.55333,-6.81157"
+       id="path5-3"
+       style="fill:#ebebeb;fill-opacity:1;stroke-width:0.264583" />
+  </g>
+</svg>
