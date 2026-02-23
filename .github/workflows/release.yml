@@ -46,7 +46,7 @@ jobs:
         SHORT_SHA=$(git rev-parse --short HEAD)
         
         # Create pre-release version
-        PRE_RELEASE_VERSION="${BASE_VERSION}-${SHORT_SHA}"
+        PRE_RELEASE_VERSION="${BASE_VERSION}-pre"
         
         echo "base_version=${BASE_VERSION}" >> $GITHUB_OUTPUT
         echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
