@@ -47,11 +47,11 @@ export class BaleChatManager {
   private attachMainWrapperObserver(): void {
     const mainWrapper = document.getElementById('app_main_wrapper');
     if (!mainWrapper) {
-      console.log("Matrixify: main wrapper not found");
+      console.log("VodozeDOM: main wrapper not found");
       setTimeout(() => this.attachMainWrapperObserver(), 500);
       return;
     }
-    console.log("Matrixify: main wrapper found. ataching...");
+    console.log("VodozeDOM: main wrapper found. ataching...");
 
     this.mainWrapperObserver = new MutationObserver(() => {
       this.checkAndAttachChildren();
@@ -123,7 +123,7 @@ export class BaleChatManager {
 
   private detachChatFooterObserver(): void {
     if (this.chatFooterObserver) {
-      console.log("Matrixify: detaching from chat footer...");
+      console.log("VodozeDOM: detaching from chat footer...");
       this.chatFooterObserver.disconnect();
       this.chatFooterObserver = null;
     }
@@ -138,7 +138,7 @@ export class BaleChatManager {
     this.messageList = messageList;
 
     this.detachMessageListObserver();
-    console.log("Matrixify: attaching message list...");
+    console.log("VodozeDOM: attaching message list...");
 
     const chatId = this.detectChatId();
     if (this.currentPeerUserId !== chatId) {
@@ -171,7 +171,7 @@ export class BaleChatManager {
   }
 
   private detachMessageListObserver(): void {
-    console.log("Matrixify: deattaching message list...");
+    console.log("VodozeDOM: deattaching message list...");
     if (this.messageListObserver) {
       this.messageListObserver.disconnect();
       this.messageListObserver = null;
@@ -190,14 +190,14 @@ export class BaleChatManager {
     this.sendButtonObserver = new MutationObserver(() => {
       const currentButton = document.querySelector('[aria-label="send-button"]') as HTMLElement;
       if (!currentButton || currentButton !== this.originalSendButton) {
-        console.log("Matrixify: reattaching send button...");
+        console.log("VodozeDOM: reattaching send button...");
         this.attachSendButtonObserver();
         return;
       }
       this.syncButtonStyles();
     });
 
-    console.log("Matrixify: attaching send button...");
+    console.log("VodozeDOM: attaching send button...");
 
     this.sendButtonObserver.observe(sendButton, {
       attributes: true,
@@ -210,7 +210,7 @@ export class BaleChatManager {
 
   private detachSendButtonObserver(): void {
     if (this.sendButtonObserver) {
-      console.log("Matrixify: detaching from send button...");
+      console.log("VodozeDOM: detaching from send button...");
       this.sendButtonObserver.disconnect();
       this.sendButtonObserver = null;
     }
@@ -240,7 +240,7 @@ export class BaleChatManager {
     }
 
     this.clonedSendButton = sendButton.cloneNode(true) as HTMLElement;
-    this.clonedSendButton.id = 'matrixify-cloned-send-button';
+    this.clonedSendButton.id = 'VodozeDOM-cloned-send-button';
 
     sendButton.parentElement?.appendChild(this.clonedSendButton);
     this.clonedSendButton.addEventListener('click', () => this.handleSend());
@@ -250,14 +250,14 @@ export class BaleChatManager {
 
   private attachEnterEvent() {
     const input = document.getElementById('editable-message-text') as HTMLElement;
-    if (input.dataset.matrixifyAttached) return;
+    if (input.dataset.VodozeDOMAttached) return;
     input.addEventListener("keypress", (event) => {
       if (event.key === 'Enter' && !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)) {
         this.handleSend();
         input.innerText = "";
       }
     });
-    input.dataset.matrixifyAttached = "";
+    input.dataset.VodozeDOMAttached = "";
   }
 
   private attachEncryptionToggle(initialMode: EncryptionMode, needsKeyExchange: boolean): void {
@@ -294,8 +294,8 @@ export class BaleChatManager {
 
     const sid = messageItem.dataset.sid;
     if (!sid) return;
-    if (messageItem.dataset.matrixifyProcessed) return;
-    messageItem.dataset.matrixifyProcessed = "true";
+    if (messageItem.dataset.VodozeDOMProcessed) return;
+    messageItem.dataset.VodozeDOMProcessed = "true";
 
     const sliced_sid = sid.split('-');
     const messageId = sliced_sid.slice(0, sliced_sid.length - 1).join("-");
@@ -353,9 +353,9 @@ export class BaleChatManager {
           this.colorMessage(element, 'green');
         }
       } else if (parsed.type === 'key_share') {
-        console.log("Matrixify: received key share request.");
+        console.log("VodozeDOM: received key share request.");
         if (parsed.senderUserId === this.getCurrentUserId()) {
-          console.log("Matrixify: this is our own key share request. aborting");
+          console.log("VodozeDOM: this is our own key share request. aborting");
           element.getElementsByClassName("p")[0].textContent = "🔑 Key exchange request sent";
           this.colorMessage(element, 'green');
           return;
@@ -370,7 +370,7 @@ export class BaleChatManager {
         );
 
         if (preKeyMessage) {
-          console.log("Matrixify: handling key share succeeded.");
+          console.log("VodozeDOM: handling key share succeeded.");
           this.colorMessage(element, 'blue');
           const span = element.querySelector('span.p');
           if (span) {

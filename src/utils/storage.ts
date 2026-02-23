@@ -1,7 +1,7 @@
 import { CryptoSession, CryptoState, StoredMessage } from '../types';
 
 class StorageService {
-  private dbName = 'MatrixifyDB';
+  private dbName = 'VodozeDOMDB';
   private version = 1;
   private db: IDBDatabase | null = null;
 

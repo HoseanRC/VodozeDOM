@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Matrixify",
+  "name": "VodozeDOM",
   "version": "1.0.0",
   "description": "End-to-end encryption for web chat messages",
   "permissions": [
@@ -28,7 +28,7 @@
   ],
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "Matrixify"
+    "default_title": "VodozeDOM"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"

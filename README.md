@@ -1,4 +1,4 @@
-# Matrixify
+# VodozeDOM
 
 A cross-browser extension for end-to-end encryption of web chat messages using the vodozemac library.
 
@@ -19,7 +19,7 @@ A cross-browser extension for end-to-end encryption of web chat messages using t
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd matrixify
+cd vodozedom
 ```
 
 2. Install dependencies:

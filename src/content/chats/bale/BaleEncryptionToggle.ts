@@ -26,12 +26,12 @@ export class EncryptionToggle {
     const emojiButton = document.querySelector('[aria-label="emoji-icon"]') as HTMLElement;
     if (!emojiButton) {
       const container = document.createElement('div');
-      container.className = 'kXxU2w matrixify-encryption-toggle';
+      container.className = 'kXxU2w vodozedom-encryption-toggle';
       return container;
     }
 
     const button = emojiButton.cloneNode(true) as HTMLElement;
-    button.className = 'kXxU2w matrixify-encryption-toggle';
+    button.className = 'kXxU2w vodozedom-encryption-toggle';
     button.removeAttribute('aria-label');
     button.setAttribute('aria-label', 'encryption-toggle');
 
@@ -116,14 +116,14 @@ export class EncryptionToggle {
   }
 
   private saveState(): void {
-    const storageKey = 'matrixify_bale_states';
+    const storageKey = 'vodozedom_bale_states';
     const states = this.loadStates();
     states[this.chatId] = this.currentMode;
     localStorage.setItem(storageKey, JSON.stringify(states));
   }
 
   private loadStates(): Record<string, EncryptionMode> {
-    const storageKey = 'matrixify_bale_states';
+    const storageKey = 'vodozedom_bale_states';
     try {
       const stored = localStorage.getItem(storageKey);
       return stored ? JSON.parse(stored) : {};
